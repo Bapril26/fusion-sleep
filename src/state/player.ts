@@ -3,9 +3,10 @@
  */
 import { engine, type LayerInput } from '../audio/engine';
 import { SOUNDS, soundById, categoryById, POPULAR_TONIGHT, type Sound } from '../data/sounds';
-import { FREE_LIMITS, PREMIUM_LIMITS, getEntitlement } from '../billing/plans';
+import { FREE_LIMITS, PREMIUM_LIMITS, getEntitlement, TEST_BUILD } from '../billing/plans';
 import { showPlayback, hidePlayback, onMediaAction } from '../native/platform';
 import { store, toast, type Layer, type Mix, type RepeatMode, type TimerMode } from './store';
+import { storyNowPlaying, toggleStory, stopStory, applyStoryTimer, cancelStoryTimer, storyActive } from './stories';
 
 const s = () => store.get();
 
@@ -25,11 +26,20 @@ function nowPlayingInfo() {
   return { title: sound?.name ?? 'Fusion Sleep', subtitle: sound ? categoryById(sound.category).name : '' };
 }
 
-function syncNative() {
+export function syncNative() {
   const st = s();
+  const story = storyNowPlaying();
+  if (story) {
+    const bg = st.status !== 'idle' && st.currentId ? ` · with ${soundById(st.currentId)?.name ?? 'sounds'}` : '';
+    showPlayback({ title: story.title, subtitle: `Bedtime story${bg}`, playing: story.playing });
+    return;
+  }
   if (st.status === 'idle') { hidePlayback(); return; }
   showPlayback({ ...nowPlayingInfo(), playing: st.status === 'playing' || st.status === 'loading' });
 }
+
+/** Is anything (sounds or a narrated story) currently active? */
+export const anythingActive = () => s().status !== 'idle' || storyActive();
 
 function layerInputs(layers: Layer[]): LayerInput[] {
   return layers.flatMap((l) => {
@@ -112,6 +122,12 @@ export async function playSound(id: string, opts: { queue?: string[]; preview?: 
 }
 
 export async function togglePlay() {
+  if (storyActive()) { await toggleStory(); return; }
+  await toggleSounds();
+}
+
+/** Pause/resume the sounds only. */
+export async function toggleSounds() {
   const st = s();
   if (st.status === 'playing') {
     await engine.pause();
@@ -127,7 +143,22 @@ export async function togglePlay() {
   syncNative();
 }
 
+/** Stop the sleep sounds. A story that is playing keeps going. */
 export async function stop() {
+  const keepTimer = storyActive();
+  if (keepTimer) {
+    await engine.stopAll(0.5, true);
+    store.set({ status: 'idle', trackLength: null, preview: false });
+  } else {
+    await engine.stopAll();
+    store.set({ status: 'idle', timer: null, trackLength: null, preview: false, sleepScreen: false });
+  }
+  syncNative();
+}
+
+/** Stop everything: sounds, story and the sleep timer. */
+export async function stopEverything() {
+  await stopStory(true);
   await engine.stopAll();
   store.set({ status: 'idle', timer: null, trackLength: null, preview: false, sleepScreen: false });
   syncNative();
@@ -231,7 +262,7 @@ export function toggleMute(id: string) {
 
 export function playMix(mix: Mix) {
   const allowed = mix.layers.filter((l) => { const so = soundById(l.id); return so && !isLocked(so); }).slice(0, limits().mixLayers);
-  if (allowed.length < mix.layers.length) toast('Some premium sounds in this mix were skipped');
+  if (allowed.length < mix.layers.length) toast('Some Pro sounds in this mix were skipped');
   if (!allowed.length) return;
   engine.cancel('track');
   store.set({ mode: 'mix', layers: allowed, activeMixId: mix.id, currentId: null, preview: false });
@@ -243,7 +274,7 @@ export function saveMix(name: string) {
   const trimmed = name.trim() || 'My mix';
   if (!st.layers.length) return false;
   if (st.mixes.length >= limits().savedMixes) {
-    toast(`Free version saves up to ${FREE_LIMITS.savedMixes} mixes. Delete one or go Premium.`);
+    toast(`Free version saves up to ${FREE_LIMITS.savedMixes} mixes. Delete one or go Pro.`);
     return false;
   }
   const mix: Mix = { id: `mix-${Date.now()}`, name: trimmed, layers: st.layers, createdAt: Date.now() };
@@ -268,31 +299,46 @@ export function deleteMix(id: string) {
 
 export async function setTimer(minutes: number, mode: TimerMode, silent = false) {
   if (minutes <= 0) return;
-  if (s().status === 'idle') await togglePlay();
-  if (s().status === 'idle') return;
-  if (s().status === 'paused') { await engine.resume(); store.set({ status: 'playing' }); }
+  if (!anythingActive()) await togglePlay();
+  if (!anythingActive()) return;
+  if (storyActive()) { if (s().story?.status === 'paused') await toggleStory(); }
+  else if (s().status === 'paused') { await engine.resume(); store.set({ status: 'playing' }); }
+  await engine.unlock();
   const total = Math.round(minutes * 60);
-  const fade = mode === 'fade' ? Math.min(s().settings.fadeMinutes * 60, total * 0.5) : 1.5;
+  const fade = timerFadeSeconds(mode, total);
   engine.schedule('timer', engine.now() + total, fade, onTimerEnd);
   store.set({ timer: { total, mode } });
+  applyStoryTimer();
   syncNative();
   if (!silent) toast(`Sleep timer set for ${formatMinutes(minutes)}${mode === 'fade' ? ' with fade-out' : ''}`, 'success');
 }
 
+export const timerFadeSeconds = (mode: TimerMode, total: number) =>
+  mode === 'fade' ? Math.min(s().settings.fadeMinutes * 60, total * 0.5) : 1.5;
+
 export function cancelTimer() {
   engine.cancel('timer');
+  cancelStoryTimer();
   store.set({ timer: null });
   toast('Sleep timer cancelled');
 }
 
-function onTimerEnd() {
-  stop().then(() => toast('Sleep timer finished. Sweet dreams.', 'info', 6000));
+export function onTimerEnd() {
+  if (!s().timer) return;
+  stopEverything().then(() => toast('Sleep timer finished. Sweet dreams.', 'info', 6000));
 }
 
 export function formatMinutes(m: number) {
   if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60), r = m % 60;
   return r ? `${h} h ${r} min` : `${h} hour${h > 1 ? 's' : ''}`;
+}
+
+/** Test builds only: unlock or lock Pro without any payment. */
+export function setProTest(on: boolean) {
+  if (!TEST_BUILD) return;
+  store.set({ proTest: on, premium: on });
+  toast(on ? 'Pro unlocked for testing. No payment is involved.' : 'Back to the free version', 'success');
 }
 
 // ---------- favourites & history ----------
@@ -336,24 +382,29 @@ export async function initPlayer() {
   engine.onStateChange = (state) => {
     // Android may suspend audio (e.g. a phone call). Reflect that in the UI.
     const st = s();
-    if (state !== 'running' && st.status === 'playing') { store.set({ status: 'paused' }); syncNative(); }
+    if (state !== 'running' && st.status === 'playing' && !storyActive()) { store.set({ status: 'paused' }); syncNative(); }
   };
   onMediaAction((a) => {
     const st = s();
-    if (a === 'play' && st.status === 'paused') togglePlay();
+    const storyState = st.story?.status;
+    if (storyActive()) {
+      if (a === 'play' && storyState === 'paused') toggleStory();
+      else if (a === 'pause' && (storyState === 'playing' || storyState === 'loading')) toggleStory();
+    }
+    else if (a === 'play' && st.status === 'paused') togglePlay();
     else if (a === 'pause' && st.status === 'playing') togglePlay();
-    else if (a === 'stop') stop();
-    else if (a === 'next') next();
-    else if (a === 'previous') previous();
+    else if (a === 'stop') stopEverything();
+    else if (a === 'next' && !storyActive()) next();
+    else if (a === 'previous' && !storyActive()) previous();
   });
   const ent = await getEntitlement();
-  store.set({ premium: ent.premium });
+  store.set({ premium: ent.premium || (TEST_BUILD && s().proTest) });
   // Timers scheduled on the audio clock fire their callbacks when the app resumes,
   // this keeps the UI honest if the callback was delayed in the background.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       const st = s();
-      if (st.timer && engine.remaining('timer') === null && st.status !== 'idle') stop();
+      if (st.timer && engine.remaining('timer') === null && anythingActive()) stopEverything();
     }
   });
 }

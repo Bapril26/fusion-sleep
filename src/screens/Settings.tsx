@@ -1,7 +1,12 @@
 import type { ReactNode } from 'react';
 import { store, useStore, confirmAction, clearPersisted, toast, type Settings as S, type Page } from '../state/store';
-import { clearRecent, stop, setMasterVolume } from '../state/player';
-import { Icon, Logo } from '../components/Icon';
+import { clearRecent, stopEverything, setMasterVolume, setProTest } from '../state/player';
+import { clearStoryHistory, setNarratorPrefs } from '../state/stories';
+import { storyServerConfigured } from '../config/storyServer';
+import { TEST_BUILD, PLAN_NAME } from '../billing/plans';
+import { soundById } from '../data/sounds';
+import { BrandFooter } from '../components/BrandFooter';
+import { Icon } from '../components/Icon';
 import { Slider, Toggle } from '../components/ui';
 import { APP_VERSION } from '../version';
 
@@ -26,6 +31,10 @@ function Choice<T extends number | string>({ options, value, onChange, fmt }: { 
 export function Settings() {
   const settings = useStore((s) => s.settings);
   const premium = useStore((s) => s.premium);
+  const proTest = useStore((s) => s.proTest);
+  const narratorPrefs = useStore((s) => s.narrator);
+  const bg = useStore((s) => s.storyBackground);
+  const narration = useStore((s) => s.narrationAvailable);
   const set = (p: Partial<S>) => store.set({ settings: { ...settings, ...p } });
   const open = (page: Page) => store.set({ page });
 
@@ -67,6 +76,21 @@ export function Settings() {
         </div>
       </div>
 
+      <div className="group-label">Bedtime stories</div>
+      <div className="group">
+        <Row icon="mic" title="Narrator voice" sub={narration === false ? 'No voice engine found on this phone' : narratorPrefs.voiceId ? 'Custom voice selected' : 'Phone default voice'} onClick={() => store.set({ sheet: 'voice' })} />
+        <div className="set-block">
+          <b style={{ fontWeight: 500 }}>Reading speed</b>
+          <Choice options={[0.75, 0.85, 0.9, 1]} value={narratorPrefs.rate} onChange={(v) => setNarratorPrefs({ rate: v })} fmt={(v) => ({ 0.75: 'Very slow', 0.85: 'Slow', 0.9: 'Relaxed', 1: 'Normal' } as Record<number, string>)[v]} />
+        </div>
+        <div className="set-block">
+          <b style={{ fontWeight: 500 }}>Default background sound</b>
+          <p className="dim tiny">Plays softly under a story if nothing else is playing.</p>
+          <Choice options={['', 'rain-gentle', 'ocean-waves', 'crickets', 'brown-noise']} value={bg.soundId ?? ''} onChange={(v) => store.set({ storyBackground: { ...bg, soundId: v || null } })} fmt={(v) => (v ? soundById(v)?.name ?? v : 'None')} />
+        </div>
+        <Row icon="sparkles" title="Personalised stories" sub={storyServerConfigured() ? 'Connected · needs internet' : 'Not set up in this version'} onClick={() => store.set({ page: 'createStory' })} />
+      </div>
+
       <div className="group-label">Display</div>
       <div className="group">
         <div className="set-row" style={{ cursor: 'default' }}>
@@ -85,17 +109,17 @@ export function Settings() {
       <div className="group-label">Help</div>
       <div className="group">
         <Row icon="moon" title="Background playback" sub="Keep sounds playing with the screen off" onClick={() => open('background')} />
-        <Row icon="crown" title="Fusion Sleep Premium" sub={premium ? 'Active' : 'See what is included'} onClick={() => store.set({ sheet: 'premium', premiumFocus: null })} />
+        <Row icon="crown" title={PLAN_NAME} sub={premium ? (proTest ? 'Unlocked for testing' : 'Active') : 'See what is included'} onClick={() => store.set({ sheet: 'premium', premiumFocus: null })} />
       </div>
 
       <div className="group-label">Your data</div>
       <div className="group">
-        <Row icon="history" title="Clear recently played" sub="Removes your listening history" onClick={() => confirmAction({
-          title: 'Clear history?', message: 'Your recently played list will be removed from this device. Favourites and mixes are kept.', confirmLabel: 'Clear', danger: true, onConfirm: clearRecent,
+        <Row icon="history" title="Clear recently played" sub="Removes your listening history and story positions" onClick={() => confirmAction({
+          title: 'Clear history?', message: 'Recently played sounds and stories, and where you stopped in each story, will be removed from this device. Favourites, mixes and your own stories are kept.', confirmLabel: 'Clear', danger: true, onConfirm: () => { clearStoryHistory(); clearRecent(); },
         })} />
         <Row icon="trash" red title="Reset all preferences" sub="Favourites, mixes, history and settings" onClick={() => confirmAction({
-          title: 'Reset everything?', message: 'This deletes your favourites, saved mixes, history and settings from this device. This cannot be undone.', confirmLabel: 'Reset', danger: true,
-          onConfirm: async () => { await stop(); clearPersisted(); store.reset(); setMasterVolume(store.get().masterVolume); toast('All preferences were reset', 'success'); },
+          title: 'Reset everything?', message: 'This deletes your favourites, saved mixes, your own stories, history, narrator choice and settings from this device. This cannot be undone.', confirmLabel: 'Reset', danger: true,
+          onConfirm: async () => { await stopEverything(); clearPersisted(); store.reset(); setMasterVolume(store.get().masterVolume); toast('All preferences were reset', 'success'); },
         })} />
       </div>
 
@@ -107,10 +131,20 @@ export function Settings() {
         <Row icon="info" title="Version" value={APP_VERSION} />
       </div>
 
-      <div className="footer-brand">
-        <div style={{ display: 'inline-block', opacity: 0.85 }}><Logo size={30} /></div>
-        <div style={{ marginTop: 6 }}>Powered by <b>Fusion Labs</b></div>
-      </div>
+      {TEST_BUILD && (
+        <>
+          <div className="group-label">Tester tools</div>
+          <div className="group">
+            <div className="set-row" style={{ cursor: 'default' }}>
+              <span className="ic"><Icon name="crown" size={18} /></span>
+              <span className="tx"><b>Unlock Pro for testing</b><span>Test build only. No payment. Hidden in the Play Store version.</span></span>
+              <Toggle on={proTest} onChange={setProTest} label="Unlock Pro for testing" />
+            </div>
+          </div>
+        </>
+      )}
+
+      <BrandFooter />
     </div>
   );
 }

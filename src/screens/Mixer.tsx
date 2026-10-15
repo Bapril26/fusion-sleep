@@ -4,6 +4,8 @@ import { togglePlay, removeLayer, setLayerVolume, toggleMute, setMasterVolume, p
 import { FREE_LIMITS } from '../billing/plans';
 import { Icon } from '../components/Icon';
 import { Art, Slider, SectionHead } from '../components/ui';
+import { BrandFooter } from '../components/BrandFooter';
+import { SoundsSwitch } from './SleepSounds';
 
 const STARTERS: Mix[] = [
   { id: 'starter-storm', name: 'Cosy Storm', createdAt: 0, layers: [{ id: 'rain-roof', volume: 0.8, muted: false }, { id: 'thunder-distant', volume: 0.6, muted: false }, { id: 'wind-gentle', volume: 0.35, muted: false }] },
@@ -34,11 +36,13 @@ export function Mixer() {
 
   return (
     <div className="screen">
-      <div className="pad" style={{ marginBottom: 18 }}>
-        <div className="eyebrow">Sound mixer</div>
+      <div className="pad">
+        <div className="eyebrow">Sleep sounds · mixer</div>
         <h1 className="title" style={{ marginTop: 4 }}>Create your perfect night</h1>
         <p className="muted small" style={{ marginTop: 6 }}>Layer rain, thunder, wind or birds and balance each one.</p>
       </div>
+      <SoundsSwitch />
+      <div style={{ height: 18 }} />
 
       {active ? (
         <div className="mix-card">
@@ -134,6 +138,7 @@ export function Mixer() {
           ))
         )}
       </section>
+      <BrandFooter />
     </div>
   );
 }

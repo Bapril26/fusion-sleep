@@ -4,6 +4,8 @@ import { store, useStore } from '../state/store';
 import { addLayer } from '../state/player';
 import { Icon } from '../components/Icon';
 import { SoundRow } from '../components/ui';
+import { BrandFooter } from '../components/BrandFooter';
+import { SoundsSwitch } from './SleepSounds';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -43,14 +45,15 @@ export function Library() {
   return (
     <div className="screen">
       <div className="pad">
-        <div className="eyebrow">Sound library</div>
+        <div className="eyebrow">Sleep sounds</div>
         <h1 className="title" style={{ marginTop: 4 }}>Find your sound</h1>
       </div>
+      <SoundsSwitch />
 
       <label className="search">
         <Icon name="search" size={20} />
-        <input type="search" placeholder="Search rain, ocean, fan…" value={search} onChange={(e) => store.set({ search: e.target.value })} aria-label="Search sounds" />
-        {search && <button onClick={() => store.set({ search: '' })} aria-label="Clear search"><Icon name="x" size={18} /></button>}
+        <input id="sound-search" type="search" placeholder="Search rain, ocean, fan…" value={search} onChange={(e) => store.set({ search: e.target.value })} aria-label="Search sounds" />
+        {search && <button onClick={() => store.set({ search: '' })} aria-label="Clear search" style={{ minWidth: 32, minHeight: 32 }}><Icon name="x" size={18} /></button>}
       </label>
 
       <div className="chips" role="tablist" aria-label="Filter sounds">
@@ -88,6 +91,7 @@ export function Library() {
       <p className="dim tiny" style={{ textAlign: 'center', marginTop: 22, padding: '0 30px' }}>
         Tap a sound to play it. Use <Icon name="plus" size={12} style={{ verticalAlign: '-2px' }} /> to layer it into a mix.
       </p>
+      <BrandFooter />
     </div>
   );
 }

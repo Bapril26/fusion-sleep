@@ -1,5 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { soundById, SOUNDS } from '../data/sounds';
+import { STORIES } from '../data/stories';
+import { getStory } from '../state/stories';
+import { BrandFooter } from '../components/BrandFooter';
 import { store, useStore } from '../state/store';
 import { togglePlay } from '../state/player';
 import { isNative } from '../native/platform';
@@ -14,26 +17,31 @@ export function SleepScreen() {
   const st = useStore((s) => s);
   useTick(1000, true);
   if (!st.sleepScreen) return null;
-  const name = st.mode === 'mix'
-    ? (st.mixes.find((m) => m.id === st.activeMixId)?.name ?? 'Your mix')
-    : st.currentId ? soundById(st.currentId)?.name : null;
+  const storyOn = !!st.story && st.story.status !== 'reading';
+  const name = storyOn
+    ? getStory(st.story!.id)?.title
+    : st.mode === 'mix'
+      ? (st.mixes.find((m) => m.id === st.activeMixId)?.name ?? 'Your mix')
+      : st.currentId ? soundById(st.currentId)?.name : null;
+  const playing = storyOn ? st.story!.status === 'playing' || st.story!.status === 'loading' : st.status === 'playing';
+  const idle = !storyOn && st.status === 'idle';
   const rem = st.timer ? timerRemaining() : null;
   const now = new Date();
   return (
     <div className="sleep" role="dialog" aria-label="Sleep screen">
       <div className="clock">{now.getHours().toString().padStart(2, '0')}:{now.getMinutes().toString().padStart(2, '0')}</div>
-      <div className="now">{st.status === 'idle' ? 'Nothing playing' : name}</div>
-      <button className={`orb ${st.settings.breathing && st.status === 'playing' ? 'breathing' : ''}`} onClick={togglePlay} aria-label={st.status === 'playing' ? 'Pause' : 'Play'}>
-        <Icon name={st.status === 'playing' ? 'pause' : 'play'} size={40} fill stroke={0} />
+      <div className="now">{idle ? 'Nothing playing' : name}</div>
+      <button className={`orb ${st.settings.breathing && playing ? 'breathing' : ''}`} onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}>
+        <Icon name={playing ? 'pause' : 'play'} size={40} fill stroke={0} />
       </button>
       <div className="remain">
         <Icon name="timer" size={16} />
         {rem !== null ? `${fmtTime(rem)} remaining` : 'No sleep timer'}
       </div>
-      {rem === null && st.status !== 'idle' && (
+      {rem === null && !idle && (
         <button className="remain" style={{ marginTop: 10, opacity: .8 }} onClick={() => store.set({ sleepScreen: false, sheet: 'timer' })}>Set a timer</button>
       )}
-      <button className="exit" onClick={() => store.set({ sleepScreen: false, sheet: st.status !== 'idle' ? 'player' : null })}>Back to player</button>
+      <button className="exit" onClick={() => store.set(storyOn ? { sleepScreen: false, page: 'storyPlayer', viewStoryId: st.story!.id } : { sleepScreen: false, sheet: st.status !== 'idle' ? 'player' : null })}>Back to player</button>
     </div>
   );
 }
@@ -42,6 +50,7 @@ export function SleepScreen() {
 
 const STEPS = [
   { icon: 'rain', eyebrow: 'Welcome', title: 'Drift off to rain, waves and nature', body: `${SOUNDS.length} calming sounds — rainfall, thunderstorms, ocean waves, forests, crickets, soft music and white noise. Every sound loops seamlessly.` },
+  { icon: 'book', eyebrow: 'Bedtime stories', title: 'Gentle stories, read to you', body: `${STORIES.length} original stories for grown-ups (romantic, peaceful, dreamy and gently mysterious), read aloud with rain or waves in the background. You can even have a new story written just for you.` },
   { icon: 'mixer', eyebrow: 'Sound mixer', title: 'Blend sounds into your own mix', body: 'Layer rain with distant thunder, wind or birds. Set each volume, then save your favourite combinations.' },
   { icon: 'timer', eyebrow: 'Sleep timer', title: 'Fall asleep, we’ll handle the rest', body: 'Choose 15 minutes to 2 hours. The sound fades out gently and stops on its own — even with the screen off.' },
   { icon: 'heart', eyebrow: 'Favourites', title: 'Your sounds, one tap away', body: 'Heart the sounds you love. Recently played and favourites are saved on your phone — no account needed.' },
@@ -87,6 +96,7 @@ function PageShell({ title, children }: { title: string; children: ReactNode }) 
         <button className="icon-btn" onClick={() => store.set({ page: null })} aria-label="Back"><Icon name="chevronLeft" /></button>
         <h1>{title}</h1>
         {children}
+        <BrandFooter />
       </div>
     </div>
   );
@@ -94,7 +104,7 @@ function PageShell({ title, children }: { title: string; children: ReactNode }) 
 
 export function InfoPage() {
   const page = useStore((s) => s.page);
-  if (!page) return null;
+  if (!page || page === 'storyPlayer' || page === 'createStory') return null;
   if (page === 'privacy') return (
     <PageShell title="Privacy policy">
       <p className="dim small">Last updated: October 2026</p>
@@ -102,6 +112,10 @@ export function InfoPage() {
       <p>Fusion Sleep does not collect, sell or share your personal information. There is no account, no sign-in and no advertising tracking.</p>
       <h2>What is stored</h2>
       <p>Your favourites, saved mixes, recently played sounds and settings are stored only on your device so the app can remember them. They never leave your phone. You can delete them at any time in Settings → Reset all preferences, or by uninstalling the app.</p>
+      <h2>Personalised stories</h2>
+      <p>If you use “Create my own story”, your story choices and the idea you type are sent over an encrypted connection to the Fusion Sleep story server and its AI provider (Anthropic) only to write your story. A random app ID (not linked to your name) is used to apply the daily limit. Finished stories are saved on your phone.</p>
+      <h2>Narration</h2>
+      <p>Stories are read aloud by your phone's own text-to-speech engine. If you pick a voice marked “online”, your phone's voice provider may process the story text to produce speech.</p>
       <h2>Permissions</h2>
       <ul>
         <li><b>Notifications</b> (Android 13+) — to show the playback controls notification while sounds play in the background.</li>
@@ -109,7 +123,7 @@ export function InfoPage() {
       </ul>
       <p>The app does not use your microphone, camera, contacts or location.</p>
       <h2>Future subscriptions</h2>
-      <p>If Premium subscriptions are introduced, payments will be handled by Google Play under Google's privacy policy. Fusion Labs will not receive your card details.</p>
+      <p>If Pro subscriptions are introduced, payments will be handled by Google Play under Google's privacy policy. Fusion Labs will not receive your card details.</p>
       <h2>Contact</h2>
       <p>Fusion Labs · fusionlabs.co.za</p>
     </PageShell>
@@ -121,10 +135,12 @@ export function InfoPage() {
       <p>Fusion Sleep is provided for relaxation and general wellbeing. It is not a medical device and does not diagnose or treat sleep disorders. If you have ongoing sleep problems, please speak to a healthcare professional.</p>
       <h2>Listening safely</h2>
       <p>Keep the volume at a comfortable, low level, especially with headphones and when listening for long periods.</p>
-      <h2>Sounds</h2>
-      <p>The sounds in Fusion Sleep are original audio generated by the Fusion Sound Engine and are © Fusion Labs. You may use them for personal listening within the app.</p>
-      <h2>Premium</h2>
-      <p>Premium features are not yet available for purchase. If they are introduced, pricing, billing and cancellation will be shown clearly before you subscribe, and handled through Google Play.</p>
+      <h2>Sounds and stories</h2>
+      <p>The sounds and the library stories in Fusion Sleep are original works © Fusion Labs. You may use them for personal listening within the app.</p>
+      <h2>Personalised stories</h2>
+      <p>Personalised stories are written by an AI service from the choices you make. They are intended for adults, are kept gentle and non-explicit, and may occasionally contain mistakes. Do not enter personal or sensitive information in your story idea.</p>
+      <h2>Fusion Sleep Pro</h2>
+      <p>Pro features are not yet available for purchase. If they are introduced, pricing, billing and cancellation will be shown clearly before you subscribe, and handled through Google Play.</p>
       <h2>Changes</h2>
       <p>These terms may be updated with new versions of the app. Continued use means you accept the updated terms.</p>
     </PageShell>

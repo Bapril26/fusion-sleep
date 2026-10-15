@@ -4,11 +4,14 @@ import { togglePlay } from '../state/player';
 import { Icon } from './Icon';
 import { Art, fmtTime, timerRemaining, useTick } from './ui';
 import { engine } from '../audio/engine';
+import { getStory, toggleStory } from '../state/stories';
+import { StoryCover } from './StoryCover';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: 'home' },
-  { id: 'library', label: 'Sounds', icon: 'library' },
-  { id: 'mixer', label: 'Mixer', icon: 'mixer' },
+  { id: 'sounds', label: 'Sleep Sounds', icon: 'waves' },
+  { id: 'stories', label: 'Stories', icon: 'book' },
+  { id: 'favourites', label: 'Favourites', icon: 'heart' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -16,13 +19,16 @@ export function TabBar() {
   const tab = useStore((s) => s.tab);
   const mode = useStore((s) => s.mode);
   const status = useStore((s) => s.status);
+  const storyOn = useStore((s) => !!s.story && s.story.status !== 'reading');
   return (
-    <nav className="tabbar">
+    <nav className="tabbar" aria-label="Main">
       {TABS.map((t) => (
-        <button key={t.id} className={`tab ${tab === t.id ? 'on' : ''}`} onClick={() => { store.set({ tab: t.id }); window.scrollTo({ top: 0 }); }}>
-          <Icon name={t.icon} size={22} />
+        <button key={t.id} className={`tab ${tab === t.id ? 'on' : ''}`} aria-current={tab === t.id ? 'page' : undefined}
+          onClick={() => { store.set({ tab: t.id, page: null }); window.scrollTo({ top: 0 }); }}>
+          <Icon name={t.icon} size={22} fill={t.id === 'favourites' && tab === t.id} />
           {t.label}
-          {t.id === 'mixer' && mode === 'mix' && status !== 'idle' && tab !== 'mixer' && <span className="dot" />}
+          {t.id === 'sounds' && mode === 'mix' && status !== 'idle' && tab !== 'sounds' && <span className="dot" />}
+          {t.id === 'stories' && storyOn && tab !== 'stories' && <span className="dot" />}
         </button>
       ))}
     </nav>
@@ -40,14 +46,40 @@ export function MiniPlayer() {
   const trackLength = useStore((s) => s.trackLength);
   const trackStart = useStore((s) => s.trackStart);
   const preview = useStore((s) => s.preview);
-  useTick(1000, status === 'playing');
+  const story = useStore((s) => s.story);
+  const page = useStore((s) => s.page);
+  useTick(1000, status === 'playing' || story?.status === 'playing');
+  const storyLive = story && story.status !== 'reading' ? getStory(story.id) : null;
+  if (storyLive && story) {
+    if (page === 'storyPlayer') return null;
+    const rem = timer ? timerRemaining() : null;
+    const playing = story.status === 'playing' || story.status === 'loading';
+    return (
+      <div className="mini" role="region" aria-label="Now reading">
+        <button style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }} onClick={() => store.set({ page: 'storyPlayer', viewStoryId: storyLive.id })} aria-label="Open story player">
+          <span style={{ width: 50, height: 50, borderRadius: 14, overflow: 'hidden', flex: 'none', border: '1px solid var(--line)' }}><StoryCover motif={storyLive.motif} seed={storyLive.id} /></span>
+          <div className="info">
+            <div className="t">{storyLive.title}</div>
+            <div className="s">
+              <span className="st">{story.status === 'loading' ? 'Starting narration…' : story.status === 'paused' ? 'Paused' : status !== 'idle' && currentId ? `Story · with ${soundById(currentId)?.name}` : 'Bedtime story'}</span>
+              {rem !== null && <span className="tm"><Icon name="timer" size={12} stroke={2} />{fmtTime(rem)}</span>}
+            </div>
+          </div>
+        </button>
+        <button className="round" onClick={() => store.set({ sheet: 'timer' })} aria-label="Sleep timer" style={timer ? { color: 'var(--blue-2)' } : undefined}><Icon name="timer" size={18} /></button>
+        <button className="round primary" onClick={toggleStory} aria-label={playing ? 'Pause story' : 'Play story'} style={{ width: 46, height: 46 }}>
+          {story.status === 'loading' ? <div className="spinner" style={{ width: 18, height: 18 }} /> : <Icon name={playing ? 'pause' : 'play'} size={20} fill stroke={0} />}
+        </button>
+      </div>
+    );
+  }
   if (status === 'idle') return null;
 
   const firstId = mode === 'single' ? currentId : layers[0]?.id;
   const sound = firstId ? soundById(firstId) : null;
   if (!sound) return null;
   const title = mode === 'mix' ? (mixes.find((m) => m.id === activeMixId)?.name ?? 'Custom mix') : sound.name;
-  const sub = mode === 'mix' ? `${layers.length} sound${layers.length > 1 ? 's' : ''} mixed` : preview ? 'Premium preview' : categoryById(sound.category).name;
+  const sub = mode === 'mix' ? `${layers.length} sound${layers.length > 1 ? 's' : ''} mixed` : preview ? 'Pro preview' : categoryById(sound.category).name;
   const rem = timer ? timerRemaining() : null;
   const progress = trackLength ? Math.min(1, (engine.now() - trackStart) / trackLength) : null;
 
@@ -58,7 +90,7 @@ export function MiniPlayer() {
         <div className="info">
           <div className="t">{title}</div>
           <div className="s">
-            {status === 'loading' ? 'Preparing sound…' : status === 'paused' ? 'Paused' : sub}
+            <span className="st">{status === 'loading' ? 'Preparing sound…' : status === 'paused' ? 'Paused' : sub}</span>
             {rem !== null && <span className="tm"><Icon name="timer" size={12} stroke={2} />{fmtTime(rem)}</span>}
           </div>
         </div>

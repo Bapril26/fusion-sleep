@@ -1,10 +1,15 @@
 import { useMemo } from 'react';
-import { CATEGORIES, SOUNDS, POPULAR_TONIGHT, soundById, categoryById } from '../data/sounds';
+import { CATEGORIES, SOUNDS, POPULAR_TONIGHT, soundById } from '../data/sounds';
+import { STORIES, FEATURED_STORIES, storyById, estimateMinutes } from '../data/stories';
 import { store, useStore } from '../state/store';
 import { togglePlay, recommendations, playMix, isLocked } from '../state/player';
+import { playStory, toggleStory, getStory } from '../state/stories';
 import { NightSky } from '../components/NightSky';
 import { Icon, Logo } from '../components/Icon';
 import { SoundCard, SectionHead, Art } from '../components/ui';
+import { StoryCard } from '../components/storyUi';
+import { StoryCover } from '../components/StoryCover';
+import { BrandFooter } from '../components/BrandFooter';
 
 function greeting() {
   const h = new Date().getHours();
@@ -15,22 +20,44 @@ function greeting() {
   return 'Good night';
 }
 
+/** Tonight's story: rotates daily through the featured list. */
+function storyOfTheNight() {
+  const day = Math.floor(Date.now() / 86400000);
+  return storyById(FEATURED_STORIES[day % FEATURED_STORIES.length])!;
+}
+
 export function Home() {
   const recent = useStore((s) => s.recent);
+  const recentStories = useStore((s) => s.recentStories);
+  const progress = useStore((s) => s.storyProgress);
   const favourites = useStore((s) => s.favourites);
+  const favStories = useStore((s) => s.favouriteStories);
+  const mine = useStore((s) => s.myStories);
   const mixes = useStore((s) => s.mixes);
   const status = useStore((s) => s.status);
   const currentId = useStore((s) => s.currentId);
   const mode = useStore((s) => s.mode);
+  const session = useStore((s) => s.story);
   const animations = useStore((s) => s.settings.animations);
   const premium = useStore((s) => s.premium);
   const recs = useMemo(() => recommendations(8), [recent, favourites, premium]);
 
-  const resumeId = recent.find((id) => { const s = soundById(id); return s && !isLocked(s); }) ?? 'rain-gentle';
-  const resume = soundById(resumeId)!;
-  const playingName = mode === 'mix' ? 'your mix' : currentId ? soundById(currentId)?.name : '';
+  const tonight = storyOfTheNight();
+  const continueStory = recentStories.map((id) => getStory(id)).find((st) => st && progress[st.id] && !progress[st.id].finished && progress[st.id].index > 0);
+  const storyLive = session && session.status !== 'reading' ? getStory(session.id) : null;
 
-  const openCategory = (id: string) => store.set({ tab: 'library', libraryFilter: id, search: '' });
+  const resumeId = recent.find((id) => { const so = soundById(id); return so && !isLocked(so); }) ?? 'rain-gentle';
+  const resume = soundById(resumeId)!;
+  const soundName = mode === 'mix' ? 'your mix' : currentId ? soundById(currentId)?.name : '';
+
+  // The big button: what's playing, else continue a story, else play a sound.
+  const hero = storyLive
+    ? { label: session!.status === 'paused' ? 'Story paused' : 'Now reading', meta: `${storyLive.title} · open`, icon: session!.status === 'paused' ? 'play' : 'pause', act: () => store.set({ page: 'storyPlayer', viewStoryId: storyLive.id }) }
+    : status !== 'idle'
+      ? { label: status === 'paused' ? 'Paused' : 'Now playing', meta: `${soundName} · open player`, icon: status === 'playing' ? 'pause' : 'play', act: () => store.set({ sheet: 'player' }) }
+      : { label: recent.length ? 'Continue listening' : 'Play a sleep sound', meta: `${resume.name} · tap to play`, icon: 'play', act: () => togglePlay() };
+
+  const favStoryList = favStories.map((id) => getStory(id)).filter(Boolean);
 
   return (
     <div className="screen" style={{ paddingTop: 0 }}>
@@ -48,31 +75,59 @@ export function Home() {
         <h1 className="display">Welcome to Fusion&nbsp;Sleep</h1>
         <p className="sub">Relax your mind. Rest your body. Sleep peacefully.</p>
 
-        <button className="big-play" onClick={() => (status === 'idle' ? togglePlay() : store.set({ sheet: 'player' }))}>
+        <button className="big-play" onClick={hero.act}>
           <span className="disc">
-            {status === 'loading' ? <div className="spinner" /> : <Icon name={status === 'playing' ? 'pause' : 'play'} size={26} fill stroke={0} />}
+            {status === 'loading' || session?.status === 'loading' ? <div className="spinner" /> : <Icon name={hero.icon} size={26} fill stroke={0} />}
           </span>
-          <span>
-            <span className="label" style={{ display: 'block' }}>
-              {status === 'idle' ? (recent.length ? 'Continue listening' : 'Start sleeping') : status === 'paused' ? 'Paused' : 'Now playing'}
-            </span>
-            <span className="meta">{status === 'idle' ? `${resume.name} · tap to play` : `${playingName} · open player`}</span>
+          <span style={{ minWidth: 0 }}>
+            <span className="label" style={{ display: 'block' }}>{hero.label}</span>
+            <span className="meta" style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hero.meta}</span>
           </span>
         </button>
 
         <div className="quick-row">
           <button className="quick" onClick={() => store.set({ sheet: 'timer' })}><Icon name="timer" size={18} />Sleep timer</button>
-          <button className="quick" onClick={() => store.set({ tab: 'mixer' })}><Icon name="mixer" size={18} />Mix sounds</button>
-          <button className="quick" onClick={() => store.set({ sleepScreen: true })} disabled={status === 'idle'} style={status === 'idle' ? { opacity: .5 } : undefined}><Icon name="moon" size={18} />Sleep mode</button>
+          <button className="quick" onClick={() => store.set({ tab: 'sounds', soundsView: 'mixer' })}><Icon name="mixer" size={18} />Mix sounds</button>
+          <button className="quick" onClick={() => store.set({ page: 'createStory' })}><Icon name="pen" size={18} />New story</button>
         </div>
       </div>
 
-      <section className="section" style={{ marginTop: 6 }}>
-        <SectionHead title="Your Sleep Sounds" action="See all" onAction={() => openCategory('all')} />
+      {/* Bedtime stories — the prominent feature */}
+      <section className="section" style={{ marginTop: 8 }}>
+        <SectionHead title="Bedtime Stories" action="All stories" onAction={() => store.set({ tab: 'stories' })} />
+        <div className="story-band">
+          <div className="txt">
+            <span className="tag" style={{ alignSelf: 'flex-start' }}><Icon name="moon" size={11} stroke={2.2} /> {continueStory ? 'Continue your story' : "Tonight's story"}</span>
+            <h3>{(continueStory ?? tonight).title}</h3>
+            <p>{continueStory ? `You're ${Math.round((progress[continueStory.id].index / Math.max(1, progress[continueStory.id].total)) * 100)}% of the way through.` : `${tonight.description.split('.')[0]}. About ${estimateMinutes(tonight)} min.`}</p>
+            <button className="btn" onClick={() => {
+              const target = continueStory ?? tonight;
+              if (session?.id === target.id && session.status !== 'reading') { toggleStory(); store.set({ page: 'storyPlayer', viewStoryId: target.id }); }
+              else playStory(target.id);
+            }}>
+              <Icon name="play" size={16} fill stroke={0} />{continueStory ? 'Resume' : 'Play story'}
+            </button>
+          </div>
+          <div className="art-side"><StoryCover motif={(continueStory ?? tonight).motif} seed={(continueStory ?? tonight).id} /></div>
+        </div>
+        <div className="rail" style={{ marginTop: 14 }}>
+          {[...mine.slice(0, 2), ...FEATURED_STORIES.map((id) => storyById(id)!), ...STORIES.filter((x) => !FEATURED_STORIES.includes(x.id))]
+            .filter((x) => x.id !== (continueStory ?? tonight).id).slice(0, 8)
+            .map((st) => <StoryCard key={st.id} story={st} />)}
+        </div>
+      </section>
+
+      <section className="section">
+        <SectionHead title="Recommended Sleep Sounds" action="All sounds" onAction={() => store.set({ tab: 'sounds', soundsView: 'library', libraryFilter: 'all', search: '' })} />
+        <div className="rail">{(recent.length || favourites.length ? recs : POPULAR_TONIGHT).map((id) => <SoundCard key={id} id={id} queue={recs} />)}</div>
+      </section>
+
+      <section className="section">
+        <SectionHead title="Browse by sound" />
         <div className="rail">
           {CATEGORIES.map((c) => (
-            <button key={c.id} className="cat-tile" onClick={() => openCategory(c.id)}
-              style={{ background: `radial-gradient(100% 120% at 100% 0%, hsla(${c.hue},95%,60%,.45), transparent 60%), linear-gradient(150deg, hsl(${c.hue},60%,15%), #05070c)` }}>
+            <button key={c.id} className="cat-tile" onClick={() => store.set({ tab: 'sounds', soundsView: 'library', libraryFilter: c.id, search: '' })}
+              style={{ background: `radial-gradient(100% 120% at 100% 0%, hsla(${c.hue},95%,58%,.28), transparent 60%), linear-gradient(150deg, hsl(${c.hue},50%,11%), var(--bg))` }}>
               <Icon name={c.icon} size={24} />
               <div>
                 <div className="name">{c.short === 'White noise' ? 'White Noise' : c.short}</div>
@@ -84,32 +139,23 @@ export function Home() {
       </section>
 
       <section className="section">
-        <SectionHead title="Popular for Tonight" />
-        <div className="rail">{POPULAR_TONIGHT.map((id) => <SoundCard key={id} id={id} queue={POPULAR_TONIGHT} />)}</div>
-      </section>
-
-      <section className="section">
-        <SectionHead title="Recently Played" action={recent.length ? 'History' : undefined} onAction={() => store.set({ tab: 'library', libraryFilter: 'recent' })} />
-        {recent.length ? (
-          <div className="rail">{recent.slice(0, 10).map((id) => <SoundCard key={id} id={id} queue={recent} />)}</div>
-        ) : (
-          <div className="empty"><Icon name="history" />Sounds you play will appear here so you can return to them quickly.</div>
-        )}
-      </section>
-
-      <section className="section">
-        <SectionHead title="Your Favourites" action={favourites.length ? 'See all' : undefined} onAction={() => store.set({ tab: 'library', libraryFilter: 'favourites' })} />
-        {favourites.length ? (
-          <div className="rail">{favourites.map((id) => <SoundCard key={id} id={id} queue={favourites} />)}</div>
-        ) : (
-          <div className="empty"><Icon name="heart" />Tap the heart on any sound to keep it here.</div>
-        )}
-      </section>
-
-      {mixes.length > 0 && (
-        <section className="section">
-          <SectionHead title="Your Mixes" action="Mixer" onAction={() => store.set({ tab: 'mixer' })} />
+        <SectionHead title="Recently Played" action={recent.length || recentStories.length ? 'Favourites' : undefined} onAction={() => store.set({ tab: 'favourites' })} />
+        {recent.length || recentStories.length ? (
           <div className="rail">
+            {recentStories.slice(0, 4).map((id) => { const st = getStory(id); return st ? <StoryCard key={id} story={st} /> : null; })}
+            {recent.slice(0, 8).map((id) => <SoundCard key={id} id={id} queue={recent} />)}
+          </div>
+        ) : (
+          <div className="empty"><Icon name="history" />Stories and sounds you play will appear here so you can return to them quickly.</div>
+        )}
+      </section>
+
+      <section className="section">
+        <SectionHead title="Your Favourites" action={favourites.length || favStoryList.length ? 'See all' : undefined} onAction={() => store.set({ tab: 'favourites' })} />
+        {favourites.length || favStoryList.length || mixes.length ? (
+          <div className="rail">
+            {favStoryList.map((st) => <StoryCard key={st!.id} story={st!} />)}
+            {favourites.map((id) => <SoundCard key={id} id={id} queue={favourites} />)}
             {mixes.map((m) => {
               const first = soundById(m.layers[0]?.id);
               if (!first) return null;
@@ -117,19 +163,17 @@ export function Home() {
                 <button key={m.id} className="sound-card" onClick={() => playMix(m)}>
                   <Art sound={first} glyphSize={28}><span className="badge"><Icon name="mixer" size={11} stroke={2.2} /> {m.layers.length} sounds</span></Art>
                   <div className="name">{m.name}</div>
-                  <div className="cat">{m.layers.map((l) => soundById(l.id)?.name.split(' ')[0]).join(' · ')}</div>
+                  <div className="cat">Saved mix</div>
                 </button>
               );
             })}
           </div>
-        </section>
-      )}
-
-      <section className="section">
-        <SectionHead title="Recommended for You" />
-        <div className="rail">{recs.map((id) => <SoundCard key={id} id={id} queue={recs} />)}</div>
-        <p className="dim tiny" style={{ padding: '8px 20px 0' }}>Based on the {recent.length || favourites.length ? `${[...new Set([...recent.slice(0, 6), ...favourites].map((id) => categoryById(soundById(id)!.category).short.toLowerCase()))].slice(0, 3).join(', ')} sounds you enjoy` : 'most-loved sounds tonight'}.</p>
+        ) : (
+          <div className="empty"><Icon name="heart" />Tap the heart on any story or sound to keep it here.</div>
+        )}
       </section>
+
+      <BrandFooter />
     </div>
   );
 }

@@ -10,9 +10,9 @@ export function Art({ sound, className = '', children, glyphSize = 26 }: { sound
   const cat = categoryById(sound.category);
   const h = cat.hue + ((sound.id.length * 7) % 14) - 7;
   const style = {
-    background: `radial-gradient(120% 90% at 20% 10%, hsla(${h}, 95%, 62%, .55), transparent 55%),
-      radial-gradient(90% 80% at 100% 100%, hsla(${h + 18}, 90%, 45%, .35), transparent 60%),
-      linear-gradient(160deg, hsl(${h}, 65%, 16%), #04060b 85%)`,
+    background: `radial-gradient(120% 90% at 20% 10%, hsla(${h}, 95%, 58%, .34), transparent 55%),
+      radial-gradient(90% 80% at 100% 100%, hsla(${h + 14}, 90%, 45%, .18), transparent 60%),
+      linear-gradient(160deg, hsl(${h}, 55%, 11%), #05070B 80%)`,
   };
   return (
     <div className={`art p-${sound.category} ${className}`} style={style}>
@@ -63,7 +63,7 @@ export function SoundCard({ id, queue }: { id: string; queue?: string[] }) {
     <div className="sound-card">
       <button style={{ display: 'block', width: '100%', textAlign: 'left' }} onClick={() => playSound(id, { queue })} aria-label={`Play ${sound.name}`}>
         <Art sound={sound} glyphSize={28}>
-          {locked && <span className="badge premium"><Icon name="crown" size={11} stroke={2.2} /> Premium</span>}
+          {locked && <span className="badge premium"><Icon name="crown" size={11} stroke={2.2} /> Pro</span>}
           {active && (status === 'loading' ? <div className="playing-bars"><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /></div> : <Bars paused={status === 'paused'} />)}
         </Art>
         <div className="name">{sound.name}</div>
@@ -93,7 +93,7 @@ export function SoundRow({ id, queue, onAdd }: { id: string; queue?: string[]; o
         <div className="info">
           <div className="name">{sound.name}</div>
           <div className="desc">
-            {locked ? <><Icon name="crown" size={11} stroke={2.2} style={{ verticalAlign: '-1px', color: 'var(--blue-2)' }} /> Premium · </> : null}
+            {locked ? <><Icon name="crown" size={11} stroke={2.2} style={{ verticalAlign: '-1px', color: 'var(--blue-2)' }} /> Pro · </> : null}
             {active && status !== 'loading' ? (status === 'paused' ? 'Paused' : 'Now playing') : sound.description}
           </div>
         </div>

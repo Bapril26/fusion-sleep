@@ -200,13 +200,14 @@ class AudioEngine {
   async resume() { await this.unlock(); }
 
   /** Stop everything (with a short fade so there's no click). */
-  async stopAll(fade = 0.5) {
+  async stopAll(fade = 0.5, keepTimer = false) {
     this.layerToken++;
-    this.cancel('timer', false);
+    if (!keepTimer) this.cancel('timer', false);
     this.cancel('track', false);
     const running = this.ctx?.state === 'running';
     const f = running ? fade : 0;
     for (const [id, ch] of this.channels) this.release(id, ch, f);
+    if (keepTimer) { this.applyFade(); return; }
     if (this.ctx) {
       const g = this.fadeGain.gain, t = this.ctx.currentTime;
       g.cancelScheduledValues(t);

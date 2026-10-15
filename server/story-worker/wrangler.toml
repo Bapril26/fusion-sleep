@@ -1,0 +1,19 @@
+name = "fusion-sleep-stories"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+MODEL = "claude-haiku-5-5"
+DAILY_LIMIT_DEVICE = "5"
+DAILY_LIMIT_IP = "20"
+DAILY_LIMIT_TOTAL = "300"
+
+# Optional but recommended: reliable daily limits.
+# 1. npx wrangler kv namespace create USAGE
+# 2. paste the id it prints below and remove the # signs
+# [[kv_namespaces]]
+# binding = "USAGE"
+# id = "PASTE_ID_HERE"
+
+# The AI key is NEVER written here. Add it as a secret:
+#   npx wrangler secret put ANTHROPIC_API_KEY

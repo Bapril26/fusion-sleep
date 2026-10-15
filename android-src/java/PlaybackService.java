@@ -5,8 +5,13 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
@@ -27,12 +32,51 @@ public class PlaybackService extends Service {
     static final String ACTION_PLAY = "za.co.fusionlabs.sleep.PLAY";
     static final String ACTION_PAUSE = "za.co.fusionlabs.sleep.PAUSE";
     static final String ACTION_STOP = "za.co.fusionlabs.sleep.STOP";
+    static final String ACTION_FOCUS = "za.co.fusionlabs.sleep.FOCUS";
 
     private static final String CHANNEL_ID = "fusion_sleep_playback";
     private static final int NOTIFICATION_ID = 7300;
     private static final long MAX_WAKE_MS = 12L * 60L * 60L * 1000L; // safety limit: 12 hours
 
     private PowerManager.WakeLock wakeLock;
+    private AudioManager audioManager;
+    private AudioFocusRequest focusRequest;
+    private boolean hasFocus = false;
+    private boolean resumeOnFocusGain = false;
+    private boolean noisyRegistered = false;
+
+    /** Phone calls, alarms and other apps: pause, then resume after short interruptions. */
+    private final AudioManager.OnAudioFocusChangeListener focusListener = change -> {
+        switch (change) {
+            case AudioManager.AUDIOFOCUS_LOSS:
+                hasFocus = false;
+                resumeOnFocusGain = false;
+                FusionPlaybackPlugin.emitAction("pause");
+                break;
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                resumeOnFocusGain = true;
+                FusionPlaybackPlugin.emitAction("pause");
+                break;
+            case AudioManager.AUDIOFOCUS_GAIN:
+                hasFocus = true;
+                if (resumeOnFocusGain) FusionPlaybackPlugin.emitAction("play");
+                resumeOnFocusGain = false;
+                break;
+            default:
+                // AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK: quiet sleep audio can keep playing.
+                break;
+        }
+    };
+
+    /** Headphones unplugged / Bluetooth disconnected: pause instead of playing out loud. */
+    private final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
+                FusionPlaybackPlugin.emitAction("pause");
+            }
+        }
+    };
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -49,6 +93,10 @@ public class PlaybackService extends Service {
         }
         if (ACTION_PAUSE.equals(action)) {
             FusionPlaybackPlugin.emitAction("pause");
+            return START_NOT_STICKY;
+        }
+        if (ACTION_FOCUS.equals(action)) {
+            requestFocus();
             return START_NOT_STICKY;
         }
         if (ACTION_STOP.equals(action)) {
@@ -68,12 +116,61 @@ public class PlaybackService extends Service {
             startForeground(NOTIFICATION_ID, notification);
         }
         acquireWakeLock();
+        if (playing) requestFocus();
+        registerNoisy();
         return START_NOT_STICKY;
+    }
+
+    private void requestFocus() {
+        if (hasFocus) return;
+        if (audioManager == null) audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) return;
+        int result;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build())
+                .setWillPauseWhenDucked(false)
+                .setOnAudioFocusChangeListener(focusListener)
+                .build();
+            result = audioManager.requestAudioFocus(focusRequest);
+        } else {
+            result = audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        }
+        hasFocus = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+    }
+
+    private void abandonFocus() {
+        if (audioManager == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && focusRequest != null) {
+            audioManager.abandonAudioFocusRequest(focusRequest);
+        } else {
+            audioManager.abandonAudioFocus(focusListener);
+        }
+        hasFocus = false;
+    }
+
+    private void registerNoisy() {
+        if (noisyRegistered) return;
+        IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(noisyReceiver, filter);
+        }
+        noisyRegistered = true;
     }
 
     @Override
     public void onDestroy() {
         releaseWakeLock();
+        abandonFocus();
+        if (noisyRegistered) {
+            try { unregisterReceiver(noisyReceiver); } catch (Exception ignored) { }
+            noisyRegistered = false;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE);
         } else {
@@ -90,6 +187,12 @@ public class PlaybackService extends Service {
     }
 
     static void updateNotification(Context context, String title, String subtitle, boolean playing) {
+        if (playing) {
+            // Ask for audio focus again when the user resumes after an interruption.
+            Intent i = new Intent(context, PlaybackService.class);
+            i.setAction(ACTION_FOCUS);
+            try { context.startService(i); } catch (Exception ignored) { }
+        }
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, build(context, title, subtitle, playing));
         } catch (SecurityException ignored) {

@@ -5,7 +5,11 @@ import {
   togglePlay, stop, next, previous, setRepeatMode, setMasterVolume, toggleFavourite, addLayer,
   setTimer, cancelTimer, saveMix, playSound, isLocked, formatMinutes, limits,
 } from '../state/player';
-import { FREE_LIMITS, PREMIUM_LIMITS, BILLING_CONFIGURED } from '../billing/plans';
+import { FREE_LIMITS, PREMIUM_LIMITS, BILLING_CONFIGURED, PLAN_NAME, PRO_PRICES } from '../billing/plans';
+import { STORIES } from '../data/stories';
+import { getStory, setNarratorPrefs } from '../state/stories';
+import { narrator, type NarratorVoice } from '../audio/narrator';
+import { StoryCover } from './StoryCover';
 import { engine } from '../audio/engine';
 import { Icon } from './Icon';
 import { Art, Slider, fmtTime, useTick, timerRemaining } from './ui';
@@ -30,6 +34,7 @@ export function Sheets() {
   if (sheet === 'premium') return <PremiumSheet />;
   if (sheet === 'saveMix') return <SaveMixSheet />;
   if (sheet === 'addLayer') return <AddLayerSheet />;
+  if (sheet === 'voice') return <VoiceSheet />;
   return null;
 }
 
@@ -59,7 +64,7 @@ function PlayerSheet() {
     <Sheet label="Now playing">
       <div className="sheet-head">
         <button className="icon-btn" onClick={() => store.set({ sheet: null })} aria-label="Close player"><Icon name="chevronDown" /></button>
-        <span className="eyebrow">{st.preview ? 'Premium preview' : isMix ? 'Your mix' : 'Now playing'}</span>
+        <span className="eyebrow">{st.preview ? 'Pro preview' : isMix ? 'Your mix' : 'Now playing'}</span>
         <button className="icon-btn" onClick={() => store.set({ sheet: null, sleepScreen: true })} aria-label="Open sleep screen"><Icon name="moon" /></button>
       </div>
 
@@ -117,9 +122,9 @@ function PlayerSheet() {
           <Icon name="timer" />{rem !== null ? fmtTime(rem) : 'Sleep timer'}
         </button>
         {isMix ? (
-          <button className="tool" onClick={() => store.set({ sheet: null, tab: 'mixer' })}><Icon name="sliders" />Edit mix</button>
+          <button className="tool" onClick={() => store.set({ sheet: null, tab: 'sounds', soundsView: 'mixer' })}><Icon name="sliders" />Edit mix</button>
         ) : (
-          <button className="tool" onClick={() => { if (!st.preview) store.set({ sheet: 'addLayer', tab: 'mixer' }); }} disabled={st.preview}>
+          <button className="tool" onClick={() => { if (!st.preview) store.set({ sheet: 'addLayer', tab: 'sounds', soundsView: 'mixer' }); }} disabled={st.preview}>
             <Icon name="plus" />Mix sounds
           </button>
         )}
@@ -127,7 +132,7 @@ function PlayerSheet() {
       </div>
 
       {st.preview && (
-        <div className="note"><Icon name="crown" size={18} /><span>You're hearing a 30-second preview of a Premium sound. The full sound is part of Fusion Sleep Premium.</span></div>
+        <div className="note"><Icon name="crown" size={18} /><span>You're hearing a 30-second preview of a Pro sound. The full sound is part of Fusion Sleep Pro.</span></div>
       )}
     </Sheet>
   );
@@ -141,6 +146,7 @@ function TimerSheet() {
   const timer = useStore((s) => s.timer);
   const status = useStore((s) => s.status);
   const settings = useStore((s) => s.settings);
+  const storyOn = useStore((s) => !!s.story && s.story.status !== 'reading');
   const [mode, setMode] = useState<TimerMode>(timer?.mode ?? settings.timerMode);
   const [custom, setCustom] = useState(20);
   useTick(1000, !!timer);
@@ -168,7 +174,7 @@ function TimerSheet() {
             </svg>
             <div className="val">
               <b>{fmtTime(rem)}</b>
-              <span className="muted small">{status === 'paused' ? 'Paused with playback' : timer.mode === 'fade' ? 'then fades out' : 'then stops'}</span>
+              <span className="muted small">{status === 'paused' && !storyOn ? 'Paused with playback' : timer.mode === 'fade' ? 'then fades out' : 'then stops'}</span>
             </div>
           </div>
           <button className="btn ghost block" onClick={cancelTimer}><Icon name="x" size={18} />Cancel timer</button>
@@ -176,7 +182,7 @@ function TimerSheet() {
         </>
       )}
 
-      {!timer && <p className="muted small" style={{ marginBottom: 14 }}>Choose how long to play. {status === 'idle' ? 'Your last sound will start playing.' : 'The timer controls the sound that is playing now.'}</p>}
+      {!timer && <p className="muted small" style={{ marginBottom: 14 }}>Choose how long to play. {storyOn ? 'The timer controls the story and any background sound.' : status === 'idle' ? 'Your last sound will start playing.' : 'The timer controls the sound that is playing now.'}</p>}
 
       <div className="segment" role="radiogroup" aria-label="When the timer ends">
         <button className={mode === 'fade' ? 'on' : ''} onClick={() => setMode('fade')} role="radio" aria-checked={mode === 'fade'}><Icon name="volume" size={16} />Fade out gently</button>
@@ -207,59 +213,122 @@ function TimerSheet() {
   );
 }
 
-// ---------- premium ----------
+// ---------- Pro ----------
 
 function PremiumSheet() {
   const focus = useStore((s) => s.premiumFocus);
+  const premium = useStore((s) => s.premium);
   const sound = focus ? soundById(focus) : null;
-  const premiumCount = SOUNDS.filter((s) => s.premium).length;
+  const story = focus && !sound ? getStory(focus) : null;
+  const proSounds = SOUNDS.filter((s) => s.premium).length;
+  const proStories = STORIES.filter((s) => s.premium).length;
   return (
-    <Sheet label="Fusion Sleep Premium">
+    <Sheet label={PLAN_NAME}>
       <div className="premium-hero">
         <div className="crown"><Icon name="crown" size={28} /></div>
-        <div className="eyebrow" style={{ color: '#cfe3ff' }}>Fusion Sleep Premium</div>
-        <h3 style={{ fontSize: 24, fontWeight: 600, marginTop: 6 }}>Unlock every sound and unlimited mixes</h3>
-        <p className="muted small" style={{ marginTop: 6 }}>The free version stays fully usable — Premium simply adds more.</p>
+        <div className="eyebrow" style={{ color: '#cfe3ff' }}>{PLAN_NAME}</div>
+        <h3 style={{ fontSize: 24, fontWeight: 600, marginTop: 6 }}>{premium ? 'Pro is unlocked' : 'Every sound, every story, unlimited mixes'}</h3>
+        <p className="muted small" style={{ marginTop: 6 }}>{premium ? 'All Pro features are switched on for this phone.' : 'The free version stays fully usable. Pro adds more for deeper, more personal sleep.'}</p>
       </div>
 
-      {sound && (
+      {sound && !premium && (
         <div className="row" style={{ background: 'var(--card)', border: '1px solid var(--line)', marginBottom: 14 }}>
           <Art sound={sound} glyphSize={22} />
-          <div className="info"><div className="name">{sound.name}</div><div className="desc">Premium sound · listen to a free preview</div></div>
-          <button className="btn" style={{ height: 42, padding: '0 14px' }} onClick={() => { store.set({ sheet: null }); playSound(sound.id, { preview: true }); }}>
+          <div className="info"><div className="name">{sound.name}</div><div className="desc">Pro sound · listen to a free preview</div></div>
+          <button className="btn" style={{ height: 44, padding: '0 14px' }} onClick={() => { store.set({ sheet: null }); playSound(sound.id, { preview: true }); }}>
             <Icon name="play" size={16} fill stroke={0} />30s
           </button>
         </div>
       )}
+      {story && !premium && (
+        <div className="row" style={{ background: 'var(--card)', border: '1px solid var(--line)', marginBottom: 14 }}>
+          <span style={{ width: 58, height: 58, borderRadius: 16, overflow: 'hidden', flex: 'none' }}><StoryCover motif={story.motif} seed={story.id} /></span>
+          <div className="info"><div className="name">{story.title}</div><div className="desc">Pro story · read the opening for free</div></div>
+          <button className="btn ghost" style={{ height: 44, padding: '0 14px' }} onClick={() => store.set({ sheet: null, page: 'storyPlayer', viewStoryId: story.id })}>Read</button>
+        </div>
+      )}
 
       {[
-        `All ${SOUNDS.length} sounds, including ${premiumCount} premium soundscapes`,
-        `Mix up to ${PREMIUM_LIMITS.mixLayers} sounds at once (free: ${FREE_LIMITS.mixLayers})`,
-        `Unlimited saved mixes (free: ${FREE_LIMITS.savedMixes})`,
-        'New soundscapes and personalisation options as they are added',
+        `All ${SOUNDS.length} sleep sounds, including ${proSounds} Pro soundscapes`,
+        `All ${STORIES.length} bedtime stories, including ${proStories} Pro stories`,
+        `Personalised AI stories: ${PREMIUM_LIMITS.storiesPerDay} a day, up to 30 minutes long (free: ${FREE_LIMITS.storiesPerDay} a day, up to 10 minutes)`,
+        `Mix up to ${PREMIUM_LIMITS.mixLayers} sounds at once and save unlimited mixes`,
+        'New stories and soundscapes as they are added',
       ].map((b) => (
         <div className="benefit" key={b}><span className="ck"><Icon name="check" size={15} stroke={2.4} /></span><span>{b}</span></div>
       ))}
 
       <table className="compare">
-        <thead><tr><th>Feature</th><th>Free</th><th>Premium</th></tr></thead>
+        <thead><tr><th>Feature</th><th>Free</th><th>Pro</th></tr></thead>
         <tbody>
-          <tr><td>Sleep sounds</td><td>{SOUNDS.length - premiumCount}</td><td>{SOUNDS.length}</td></tr>
-          <tr><td>Sleep timer & fade-out</td><td>✓</td><td>✓</td></tr>
-          <tr><td>Favourites</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Sleep sounds</td><td>{SOUNDS.length - proSounds}</td><td>{SOUNDS.length}</td></tr>
+          <tr><td>Bedtime stories</td><td>{STORIES.length - proStories}</td><td>{STORIES.length}</td></tr>
+          <tr><td>Personalised stories a day</td><td>{FREE_LIMITS.storiesPerDay}</td><td>{PREMIUM_LIMITS.storiesPerDay}</td></tr>
+          <tr><td>Longest personalised story</td><td>10 min</td><td>30 min</td></tr>
           <tr><td>Sounds per mix</td><td>{FREE_LIMITS.mixLayers}</td><td>{PREMIUM_LIMITS.mixLayers}</td></tr>
           <tr><td>Saved mixes</td><td>{FREE_LIMITS.savedMixes}</td><td>Unlimited</td></tr>
+          <tr><td>Sleep timer, fade-out, narration</td><td>✓</td><td>✓</td></tr>
         </tbody>
       </table>
 
-      <button className="btn block" style={{ marginTop: 18 }} disabled={!BILLING_CONFIGURED}>
-        {BILLING_CONFIGURED ? 'Upgrade to Premium' : 'Premium is coming soon'}
-      </button>
-      <div className="note">
-        <Icon name="info" size={18} />
-        <span>Subscriptions aren't available yet, so nothing can be purchased and you will never be charged. When Premium launches it will be offered through Google Play.</span>
+      {!premium && (
+        <>
+          <div className="grid-3" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 18 }}>
+            <div className="preset"><b style={{ fontSize: 19 }}>{PRO_PRICES.monthly}</b><span>per month</span></div>
+            <div className="preset on"><b style={{ fontSize: 19 }}>{PRO_PRICES.yearly}</b><span>per year · save 44%</span></div>
+          </div>
+          <p className="dim tiny" style={{ textAlign: 'center', marginTop: 8 }}>{PRO_PRICES.trialDays}-day free trial · cancel any time in Google Play</p>
+          <button className="btn block" style={{ marginTop: 14 }} disabled={!BILLING_CONFIGURED}>
+            {BILLING_CONFIGURED ? `Start ${PRO_PRICES.trialDays}-day free trial` : 'Pro is coming soon'}
+          </button>
+          <div className="note">
+            <Icon name="info" size={18} />
+            <span>Subscriptions aren't available yet, so nothing can be bought and you won't be charged. When Pro launches it will be offered through Google Play.</span>
+          </div>
+        </>
+      )}
+      <button className="btn ghost block" style={{ marginTop: 12 }} onClick={() => store.set({ sheet: null })}>{premium ? 'Close' : 'Continue with free version'}</button>
+    </Sheet>
+  );
+}
+
+// ---------- narrator voice ----------
+
+function VoiceSheet() {
+  const prefs = useStore((s) => s.narrator);
+  const [voices, setVoices] = useState<NarratorVoice[] | null>(null);
+  useEffect(() => { narrator.voices().then((r) => setVoices(r.voices)).catch(() => setVoices([])); }, []);
+  const speeds: [number, string][] = [[0.75, 'Very slow'], [0.85, 'Slow'], [0.9, 'Relaxed'], [1, 'Normal']];
+  return (
+    <Sheet label="Narrator">
+      <div className="sheet-head">
+        <h3>Narrator</h3>
+        <button className="icon-btn" onClick={() => store.set({ sheet: null })} aria-label="Close"><Icon name="x" /></button>
       </div>
-      <button className="btn ghost block" style={{ marginTop: 12 }} onClick={() => store.set({ sheet: null })}>Continue with free version</button>
+      <div className="label" style={{ marginTop: 0 }}>Reading speed</div>
+      <div className="wrap-chips">
+        {speeds.map(([r, l]) => <button key={r} className={`chip ${Math.abs(prefs.rate - r) < 0.01 ? 'on' : ''}`} onClick={() => setNarratorPrefs({ rate: r })}>{l}</button>)}
+      </div>
+      <div className="label">Voice</div>
+      {voices === null ? (
+        <div className="gen-status"><div className="spinner" />Finding voices on this phone…</div>
+      ) : voices.length === 0 ? (
+        <div className="notice warn"><Icon name="info" size={18} /><span>No English voices were found. On Android, open Settings → Accessibility → Text-to-speech, choose “Speech Services by Google”, and install an English voice.</span></div>
+      ) : (
+        <div className="voice-list">
+          <button className={`voice-item ${!prefs.voiceId ? 'on' : ''}`} onClick={() => setNarratorPrefs({ voiceId: null })}>
+            <Icon name="mic" size={18} /><span className="tx"><b>Phone default</b><span>The voice chosen in Android settings</span></span>{!prefs.voiceId && <Icon name="check" size={18} />}
+          </button>
+          {voices.map((v) => (
+            <button key={v.id} className={`voice-item ${prefs.voiceId === v.id ? 'on' : ''}`} onClick={() => setNarratorPrefs({ voiceId: v.id })}>
+              <Icon name="mic" size={18} />
+              <span className="tx"><b>{v.label}</b><span>{v.network ? 'Needs internet · may sound more natural' : 'Works offline'}</span></span>
+              {prefs.voiceId === v.id && <Icon name="check" size={18} />}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="dim tiny" style={{ marginTop: 12 }}>Narration uses the text-to-speech voices installed on your phone. It's free and doesn't use your data unless you pick an online voice.</p>
     </Sheet>
   );
 }
@@ -317,7 +386,7 @@ function AddLayerSheet() {
             <Art sound={s} glyphSize={22} />
             <div className="info">
               <div className="name">{s.name}</div>
-              <div className="desc">{isLocked(s) ? 'Premium · ' : ''}{s.description}</div>
+              <div className="desc">{isLocked(s) ? 'Pro · ' : ''}{s.description}</div>
             </div>
             <span className="round primary" style={{ width: 34, height: 34 }}><Icon name={isLocked(s) ? 'lock' : 'plus'} size={16} /></span>
           </div>

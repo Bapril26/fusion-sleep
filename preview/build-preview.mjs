@@ -19,7 +19,7 @@ const app = await build({
   entryPoints: [path.join(root, 'src/main.tsx')],
   bundle: true, write: false, outdir: out, format: 'iife', minify: true, target: 'es2020',
   jsx: 'automatic', loader: { '.woff': 'dataurl' },
-  define: { __SYNTH_WORKER_SRC__: JSON.stringify(workerSrc), 'process.env.NODE_ENV': '"production"' },
+  define: { __SYNTH_WORKER_SRC__: JSON.stringify(workerSrc), 'process.env.NODE_ENV': '"production"', 'import.meta.env': JSON.stringify({ VITE_TEST_BUILD: 'true', VITE_STORY_API_URL: process.env.VITE_STORY_API_URL ?? '' }) },
   nodePaths: [path.join(root, 'node_modules')],
   plugins: [{
     name: 'shims',

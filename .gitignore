@@ -6,3 +6,4 @@ android/.gradle/
 android/build/
 *.keystore
 .DS_Store
+!android-src/signing/debug.keystore

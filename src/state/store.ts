@@ -2,11 +2,26 @@ import { useSyncExternalStore } from 'react';
 
 // ---------- types ----------
 
+import type { Story } from '../data/stories';
+
 export type RepeatMode = 'loop' | 'once' | 'next';
 export type TimerMode = 'stop' | 'fade';
-export type Tab = 'home' | 'library' | 'mixer' | 'settings';
-export type Sheet = 'player' | 'timer' | 'premium' | 'saveMix' | 'addLayer';
-export type Page = 'privacy' | 'terms' | 'about' | 'background';
+export type Tab = 'home' | 'sounds' | 'stories' | 'favourites' | 'settings';
+export type Sheet = 'player' | 'timer' | 'premium' | 'saveMix' | 'addLayer' | 'voice';
+export type Page = 'privacy' | 'terms' | 'about' | 'background' | 'storyPlayer' | 'createStory';
+export type StoryStatus = 'loading' | 'playing' | 'paused' | 'reading';
+
+export interface StoryProgress { index: number; total: number; updatedAt: number; finished?: boolean }
+export interface NarratorPrefs { voiceId: string | null; rate: number; volume: number }
+export interface StoryBackground { soundId: string | null; volume: number }
+
+export interface StorySession {
+  id: string;
+  status: StoryStatus;
+  index: number;      // current chunk
+  total: number;      // number of chunks
+  error: string | null;
+}
 
 export interface Settings {
   defaultVolume: number;      // 0..1, used when the app starts
@@ -31,6 +46,17 @@ export interface Persisted {
   soundVolumes: Record<string, number>;
   masterVolume: number;
   repeatMode: RepeatMode;
+  // bedtime stories
+  favouriteStories: string[];
+  recentStories: string[];
+  storyProgress: Record<string, StoryProgress>;
+  myStories: Story[];
+  narrator: NarratorPrefs;
+  storyBackground: StoryBackground;
+  genUsage: { day: string; count: number };
+  deviceId: string;
+  /** test builds only: Pro unlocked for testing, no payment */
+  proTest: boolean;
 }
 
 export interface Toast { id: number; text: string; kind: 'info' | 'error' | 'success' }
@@ -57,6 +83,12 @@ export interface Runtime {
   confirm: Confirm | null;
   libraryFilter: string;
   search: string;
+  soundsView: 'library' | 'mixer';
+  story: StorySession | null;
+  viewStoryId: string | null;
+  storyFilter: string;
+  storySearch: string;
+  narrationAvailable: boolean | null;
 }
 
 export type State = Persisted & Runtime;
@@ -81,6 +113,15 @@ const DEFAULT_PERSISTED: Persisted = {
   soundVolumes: {},
   masterVolume: DEFAULT_SETTINGS.defaultVolume,
   repeatMode: 'loop',
+  favouriteStories: [],
+  recentStories: [],
+  storyProgress: {},
+  myStories: [],
+  narrator: { voiceId: null, rate: 0.9, volume: 1 },
+  storyBackground: { soundId: 'rain-gentle', volume: 0.3 },
+  genUsage: { day: '', count: 0 },
+  deviceId: '',
+  proTest: false,
 };
 
 const DEFAULT_RUNTIME: Runtime = {
@@ -88,6 +129,7 @@ const DEFAULT_RUNTIME: Runtime = {
   queue: [], trackStart: 0, trackLength: null, timer: null, premium: false,
   tab: 'home', sheet: null, premiumFocus: null, sleepScreen: false, page: null,
   toast: null, confirm: null, libraryFilter: 'all', search: '',
+  soundsView: 'library', story: null, viewStoryId: null, storyFilter: 'all', storySearch: '', narrationAvailable: null,
 };
 
 // ---------- persistence ----------
@@ -104,6 +146,8 @@ function loadPersisted(): Persisted {
       ...DEFAULT_PERSISTED,
       ...data,
       settings: { ...DEFAULT_SETTINGS, ...(data.settings ?? {}) },
+      narrator: { ...DEFAULT_PERSISTED.narrator, ...(data.narrator ?? {}) },
+      storyBackground: { ...DEFAULT_PERSISTED.storyBackground, ...(data.storyBackground ?? {}) },
     };
   } catch {
     return DEFAULT_PERSISTED;
@@ -126,8 +170,14 @@ export function clearPersisted() {
 
 // ---------- tiny store ----------
 
+function newDeviceId() {
+  try { return crypto.randomUUID(); } catch { return `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`; }
+}
+
 const initial = loadPersisted();
+if (!initial.deviceId) initial.deviceId = newDeviceId();
 let state: State = { ...initial, ...DEFAULT_RUNTIME };
+savePersisted(state); // keeps the new device id and any migrated defaults
 const listeners = new Set<() => void>();
 
 export const store = {
@@ -140,7 +190,7 @@ export const store = {
   },
   subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
   reset() {
-    state = { ...DEFAULT_PERSISTED, ...DEFAULT_RUNTIME, onboarded: true, premium: state.premium };
+    state = { ...DEFAULT_PERSISTED, ...DEFAULT_RUNTIME, onboarded: true, premium: state.premium && !state.proTest, deviceId: state.deviceId, narrationAvailable: state.narrationAvailable };
     savePersisted(state);
     listeners.forEach((l) => l());
   },

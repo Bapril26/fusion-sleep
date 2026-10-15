@@ -18,10 +18,10 @@ const step = (msg) => console.log('✓ ' + msg);
 
 // 1. Native playback plugin + service
 mkdirSync(pkgDir, { recursive: true });
-for (const f of ['FusionPlaybackPlugin.java', 'PlaybackService.java']) {
+for (const f of ['FusionPlaybackPlugin.java', 'PlaybackService.java', 'FusionSpeechPlugin.java']) {
   copyFileSync(path.join(root, 'android-src/java', f), path.join(pkgDir, f));
 }
-step('Copied background playback service and plugin');
+step('Copied playback service, playback plugin and narration plugin');
 
 // 2. Register the plugin in MainActivity
 const activity = path.join(pkgDir, 'MainActivity.java');
@@ -35,11 +35,12 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(FusionPlaybackPlugin.class);
+        registerPlugin(FusionSpeechPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
 `);
-step('Registered FusionPlayback plugin in MainActivity');
+step('Registered FusionPlayback and FusionSpeech plugins in MainActivity');
 
 // 3. Manifest: permissions + service
 const manifestPath = path.join(main, 'AndroidManifest.xml');
@@ -60,8 +61,20 @@ if (!manifest.includes('.PlaybackService')) {
             android:foregroundServiceType="mediaPlayback" />
     </application>`);
 }
+// Don't reload the web view when screen density changes (Capacitor 8 advice)
+manifest = manifest.replace(/android:configChanges="([^"]*)"/, (m, v) => (v.includes('density') ? m : `android:configChanges="${v}|density"`));
+
+// Android 11+: allow the app to find the phone's text-to-speech engine.
+if (!manifest.includes('android.intent.action.TTS_SERVICE')) {
+  manifest = manifest.replace('</manifest>', `    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+</manifest>`);
+}
 writeFileSync(manifestPath, manifest);
-step('Updated AndroidManifest.xml (permissions + playback service)');
+step('Updated AndroidManifest.xml (permissions, playback service, text-to-speech access)');
 
 // 4. Icons, notification icon, splash
 const res = path.join(main, 'res');
@@ -96,8 +109,12 @@ if (existsSync(stylesPath)) {
 const gradlePath = path.join(android, 'app/build.gradle');
 if (existsSync(gradlePath)) {
   const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-  writeFileSync(gradlePath, readFileSync(gradlePath, 'utf8').replace(/versionName "[^"]*"/, `versionName "${pkg.version}"`));
-  step(`Set versionName ${pkg.version}`);
+  const [maj, min, pat] = pkg.version.split('.').map(Number);
+  const code = maj * 10000 + min * 100 + pat;
+  writeFileSync(gradlePath, readFileSync(gradlePath, 'utf8')
+    .replace(/versionName "[^"]*"/, `versionName "${pkg.version}"`)
+    .replace(/versionCode \d+/, `versionCode ${code}`));
+  step(`Set versionName ${pkg.version} (versionCode ${code})`);
 }
 
 console.log('\nAndroid project ready. Next: npm run android:sync, then npm run android:open (or npm run android:apk).');
