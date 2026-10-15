@@ -1,95 +1,89 @@
-# Fusion Sleep — by Fusion Labs
+# Fusion Sleep, by Fusion Labs
 
-A sleep and relaxation app for Android: 31 seamless ambient sounds, a sound mixer,
-a sleep timer with fade-out, favourites, a low-light sleep screen and background
-playback. Built with React + TypeScript + Vite, packaged for Android with Capacitor 6.
+A sleep and relaxation app for Android:
+- 31 seamless sleep sounds and a sound mixer
+- 12 original adult bedtime stories, read aloud by the phone's own voice
+- personalised AI stories through your own secure server
+- a sleep timer with fade-out, favourites, and a Pro tier
 
-- **Package id:** `za.co.fusionlabs.sleep`
-- **App name:** Fusion Sleep · **Version:** 1.0.0
+Built with React + TypeScript + Vite, and packaged for Android with Capacitor 8 (target Android 16 / API 36).
 
----
+- **Package ID:** `za.co.fusionlabs.sleep`
+- **Version:** 1.1.0 (versionCode 10100)
 
-## 1. What you need on your computer (one time)
+## Get the test APK (no computer needed)
 
-| Tool | Where to get it |
-|---|---|
-| Node.js 20 or newer | https://nodejs.org (LTS) |
-| Android Studio (Koala or newer) | https://developer.android.com/studio — during setup install the Android SDK (API 34) |
-| JDK 17 | Bundled with Android Studio — nothing extra to install |
+Every push to `main` builds a fresh test APK on GitHub:
 
-On Windows, use PowerShell or the Android Studio terminal. Wherever you see `./gradlew`, Windows uses `gradlew.bat`.
+- **Direct download:** https://github.com/Bapril26/fusion-sleep/releases/download/test-latest/Fusion-Sleep-test.apk
+- or **Releases:** https://github.com/Bapril26/fusion-sleep/releases
 
-## 2. Build the APK
+Test builds include **Settings → Tester tools → Unlock Pro for testing** (no payment). Play Store builds don't.
 
-```bash
-cd fusion-sleep
-npm install                 # downloads React, Vite, Capacitor
-npm run android:add         # creates android/ and adds the Fusion Sleep native parts
-npm run android:sync        # builds the web app and copies it into android/
-```
+Install: open the link on the phone, tap the downloaded file, and allow "Install unknown apps" for your browser if asked.
+Version 1.1 is signed with a new fixed test key. **Uninstall version 1.0 first**; from now on each test APK installs over the last one.
 
-Then either:
-
-**A. Android Studio (easiest)**
-```bash
-npm run android:open
-```
-Wait for Gradle sync to finish, then **Build → Build App Bundle(s) / APK(s) → Build APK(s)**.
-The file appears at `android/app/build/outputs/apk/debug/app-debug.apk`.
-
-**B. Command line**
-```bash
-npm run android:apk
-```
-(Same output path. On Windows: `npm run android:sync`, then `cd android` and `gradlew.bat assembleDebug`.)
-
-## 3. Install on your phone
-
-- **USB:** enable *Developer options → USB debugging* on the phone, plug it in, and press ▶ Run in Android Studio. Or run `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`.
-- **Without a cable:** copy `app-debug.apk` to the phone (WhatsApp to yourself, Google Drive, USB), tap it, and allow *Install unknown apps* for that app when asked.
-
-## 4. Release build for Google Play
-
-1. In Android Studio: **Build → Generate Signed App Bundle / APK → Android App Bundle**, create a keystore (keep it and its passwords safe forever — you need it for every update).
-2. Upload the `.aab` to Google Play Console. Play requires a privacy policy URL (the in-app policy text is in `src/screens/Overlays.tsx`; publish it on fusionlabs.co.za).
-3. Declare the **foreground service type "Media playback"** in Play Console → App content, explaining it keeps sleep sounds playing with the screen off.
-
-## 5. Test checklist on a real phone
-
-- [ ] Installs and opens; introduction can be skipped
-- [ ] Every tab opens; Android back button closes sheets and returns to Home
-- [ ] Sounds play and pause; next/previous work
-- [ ] Mixer: 3 layers play together, each volume and mute works, master volume works
-- [ ] Save, reopen and delete a mix; favourites survive closing the app
-- [ ] Sleep timer: set 15 min, cancel it; set a custom timer and let it fade out and stop
-- [ ] Lock the phone — sound keeps playing; notification Pause/Play/Stop work
-- [ ] Timer still stops playback with the screen off
-- [ ] Stop removes the notification
-
-If audio stops with the screen off on Samsung/Xiaomi/Huawei/Oppo: Settings → Apps → Fusion Sleep → Battery → Unrestricted.
-
-## 6. Project map
+## Project map
 
 ```
 src/
-  data/sounds.ts         sound catalogue — add sounds/categories here
-  audio/synth.ts         Fusion Sound Engine (original generated audio, seamless loops)
-  audio/engine.ts        Web Audio player, mixer, timer fade on the audio clock
-  state/store.ts         app state + local persistence (no account, no server)
-  state/player.ts        play / mix / timer / favourites actions
-  billing/plans.ts       free vs premium limits; subscription hook-in point
-  native/platform.ts     bridge to the Android playback service
-  screens/, components/  user interface
-android-src/             native Java service + icons, installed by scripts/setup-android.mjs
-public/sounds/           drop recorded audio here (see README inside)
+  data/sounds.ts           sound catalogue (31 sounds)
+  data/stories.ts          the 12 bedtime stories (full text); add stories here
+  audio/synth.ts           Fusion Sound Engine: original generated sounds, seamless loops
+  audio/engine.ts          Web Audio player, mixer, timer fade on the audio clock
+  audio/narrator.ts        story narration: Android TTS plugin, or Web Speech in the browser
+  state/store.ts           app state and local persistence (no account)
+  state/player.ts          sounds, mixer, timer, favourites
+  state/stories.ts         story playback, progress, background sound, timer fade
+  state/generate.ts        personalised stories via the story server (streaming, limits, caching)
+  billing/plans.ts         Free vs Pro limits, prices, tester unlock, billing hook-in point
+  config/storyServer.ts    story server URL (set at build time; not a secret)
+  screens/                 Home, Sleep Sounds (library + mixer), Stories, Favourites, Settings,
+                           StoryPlayer, CreateStory, overlays
+  components/              UI pieces, story covers (SVG artwork drawn in code), brand footer
+android-src/
+  java/PlaybackService.java       foreground media service, notification controls, audio focus, wake lock
+  java/FusionPlaybackPlugin.java  bridge to that service
+  java/FusionSpeechPlugin.java    narration with Android TextToSpeech (offline, free)
+  signing/debug.keystore          shared TEST signing key (not used for the Play Store)
+server/story-worker/       Cloudflare Worker that writes stories with Claude (holds the API key)
+scripts/setup-android.mjs  adds the native parts to the generated android/ project
 ```
 
-## 7. Premium subscriptions (later)
+## Build on your own computer (optional)
 
-The free version is complete and nothing can be charged. `src/billing/plans.ts`
-explains how to connect Google Play Billing when you're ready; the rest of the app
-already reads premium status from there.
+Needs Node.js 22+, Android Studio Otter (2025.2.1) or newer, and JDK 21.
+
+```bash
+npm install
+npm run android:add        # creates android/ and installs Fusion Sleep's native parts
+npm run android:apk        # debug APK → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+For a test build with the Pro unlock switch, set `VITE_TEST_BUILD=true` before `npm run android:sync`.
+
+## Personalised stories (optional)
+
+These need the story server. See `server/story-worker/README.md`. Without it, "Create my own story" explains
+that it isn't set up, and everything else works offline.
+
+## Play Store
+
+See `PLAY_STORE.md` for the signed bundle, store listing text, data-safety answers and Pro pricing.
+
+## Test checklist (on a real phone)
+
+- [ ] Installs and opens; the introduction can be skipped
+- [ ] All five tabs work; the Android back button closes pages and sheets, then returns Home
+- [ ] Sleep sounds play, pause and loop; mixer layers and volumes work; mixes save
+- [ ] A story plays aloud; pause and resume continue from the same place; next and previous paragraph work
+- [ ] Background sound plays under the story with its own volume
+- [ ] Sleep timer (15 / 30 / 45 / 60 / 90 min) fades out and stops both story and sounds
+- [ ] Lock the phone: the story and sounds keep playing; notification Play / Pause / Stop work
+- [ ] A phone call or unplugging headphones pauses playback
+- [ ] Closing and reopening the app keeps favourites, story positions, narrator choice and settings
+- [ ] Settings → Tester tools → Unlock Pro makes Pro stories and sounds playable
 
 ---
 
-Powered by **Fusion Labs** · fusionlabs.co.za
+Created by **Fusion Labs** · fusionlabs.co.za
