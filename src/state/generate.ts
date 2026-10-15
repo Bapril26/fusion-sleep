@@ -54,7 +54,7 @@ export function parseStory(raw: string): { title: string; text: string } {
   return { title, text: body };
 }
 
-const MOTIFS: Record<StoryCategoryId, Story['motif'][]> = {
+const MOTIFS: Partial<Record<StoryCategoryId, Story['motif'][]>> = {
   romantic: ['sea', 'books', 'lighthouse'],
   peaceful: ['cabin', 'train', 'village', 'shore'],
   dream: ['island', 'balloon', 'garden'],
@@ -133,7 +133,7 @@ export async function generateStory(r: StoryRequest, onText: (soFar: string) => 
 
     const { title, text } = parseStory(raw);
     if (text.split(/\s+/).length < 120) throw new GenerationError('The story came back too short. Please try again.', 'too_short');
-    const pool = MOTIFS[r.category];
+    const pool = MOTIFS[r.category] ?? ['custom'];
     const story: Story = {
       id: `my-${Date.now().toString(36)}`,
       title,

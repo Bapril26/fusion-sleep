@@ -8,7 +8,10 @@
  * blank line in `text`. Duration is estimated automatically from word count.
  */
 
-export type StoryCategoryId = 'romantic' | 'peaceful' | 'dream' | 'mystery';
+import { KIDS_CATEGORIES, KIDS_STORIES } from './kidsStories';
+
+export type StoryCategoryId = 'romantic' | 'peaceful' | 'dream' | 'mystery' | 'kidsAnimals' | 'kidsAdventure' | 'kidsCosy';
+export type Audience = 'adult' | 'kids';
 export type CoverMotif = 'sea' | 'books' | 'lighthouse' | 'cabin' | 'train' | 'village' | 'shore' | 'island' | 'balloon' | 'garden' | 'hotel' | 'lamp' | 'custom';
 
 export interface StoryCategory {
@@ -28,6 +31,8 @@ export interface Story {
   mood: string;
   motif: CoverMotif;
   text: string;
+  /** 'kids' for children's stories; adult stories leave this empty */
+  audience?: Audience;
   /** true for stories written by AI on request */
   generated?: boolean;
   createdAt?: number;
@@ -46,7 +51,8 @@ export const STORY_CATEGORIES: StoryCategory[] = [
   { id: 'mystery', name: 'Gentle Mystery', short: 'Gentle mystery', blurb: 'Unhurried puzzles with reassuring endings', icon: 'lamp' },
 ];
 
-export const storyCategoryById = (id: StoryCategoryId) => STORY_CATEGORIES.find((c) => c.id === id)!;
+export const storyCategoryById = (id: StoryCategoryId) => STORY_CATEGORIES.find((c) => c.id === id) ?? KIDS_CATEGORIES.find((c) => c.id === id) ?? STORY_CATEGORIES[1];
+export const isKids = (story: Story) => story.audience === 'kids';
 
 export const paragraphsOf = (story: Story) => story.text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
 export const wordCount = (story: Story) => story.text.split(/\s+/).filter(Boolean).length;
@@ -507,7 +513,9 @@ export const STORIES: Story[] = [
   },
 ];
 
-export const storyById = (id: string, extra: Story[] = []) => STORIES.find((s) => s.id === id) ?? extra.find((s) => s.id === id);
+export const storyById = (id: string, extra: Story[] = []) => STORIES.find((s) => s.id === id) ?? KIDS_STORIES.find((s) => s.id === id) ?? extra.find((s) => s.id === id);
+
+export { KIDS_CATEGORIES, KIDS_STORIES };
 
 /** Stories shown first on the home screen. */
 export const FEATURED_STORIES = ['rain-cabin', 'bookshop-long-street', 'night-train-north', 'island-slow-tides', 'room-eleven', 'paternoster-evening'];

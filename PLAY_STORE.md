@@ -31,6 +31,7 @@ Fusion Sleep helps you switch off and fall asleep. Choose from 31 calming sounds
 
 - 31 seamless sleep sounds and a sound mixer
 - 12 original bedtime stories for grown-ups: romantic, peaceful, dreamy and gentle mysteries
+- 8 gentle bedtime stories for little ones, with a Kids Mode for parents
 - Read along, or listen with the screen off
 - Sleep timer with gentle fade-out
 - Favourites and saved mixes, no account needed
@@ -43,7 +44,7 @@ Created by Fusion Labs, South Africa.
 - **Ads:** No ads.
 - **App access:** All features available without login.
 - **Content rating:** answer the questionnaire. No violence or sexual content; stories are adult-oriented but non-explicit. Expect a general audience or "Teen" rating.
-- **Target audience:** 18 and over (the stories are for adults).
+- **Target audience:** 18 and over. The app is for adults; the Kids section is for parents and carers to play to children (like other sleep apps), so don't select child age groups or join the Families programme. Kids Mode hides grown-up content.
 - **Data safety:**
   - Data collected: *App activity → Other user-generated content* (only if personalised stories are switched on: the story idea the user types, sent to write the story, not stored by Fusion Labs). Shared with a service provider (Anthropic) for app functionality. Encrypted in transit. Users can't request deletion because nothing is stored.
   - Device ID: a random app ID used only for daily limits. Declare under *Device or other IDs* if you switch on personalised stories.

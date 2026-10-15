@@ -7,7 +7,7 @@ import type { Story } from '../data/stories';
 export type RepeatMode = 'loop' | 'once' | 'next';
 export type TimerMode = 'stop' | 'fade';
 export type Tab = 'home' | 'sounds' | 'stories' | 'favourites' | 'settings';
-export type Sheet = 'player' | 'timer' | 'premium' | 'saveMix' | 'addLayer' | 'voice';
+export type Sheet = 'player' | 'timer' | 'premium' | 'saveMix' | 'addLayer' | 'voice' | 'parentGate';
 export type Page = 'privacy' | 'terms' | 'about' | 'background' | 'storyPlayer' | 'createStory';
 export type StoryStatus = 'loading' | 'playing' | 'paused' | 'reading';
 
@@ -57,6 +57,8 @@ export interface Persisted {
   deviceId: string;
   /** test builds only: Pro unlocked for testing, no payment */
   proTest: boolean;
+  /** Kids Mode: only children's content; a grown-up check is needed to turn it off */
+  kidsMode: boolean;
 }
 
 export interface Toast { id: number; text: string; kind: 'info' | 'error' | 'success' }
@@ -88,6 +90,7 @@ export interface Runtime {
   viewStoryId: string | null;
   storyFilter: string;
   storySearch: string;
+  storyAudience: 'adult' | 'kids';
   narrationAvailable: boolean | null;
 }
 
@@ -122,6 +125,7 @@ const DEFAULT_PERSISTED: Persisted = {
   genUsage: { day: '', count: 0 },
   deviceId: '',
   proTest: false,
+  kidsMode: false,
 };
 
 const DEFAULT_RUNTIME: Runtime = {
@@ -129,7 +133,7 @@ const DEFAULT_RUNTIME: Runtime = {
   queue: [], trackStart: 0, trackLength: null, timer: null, premium: false,
   tab: 'home', sheet: null, premiumFocus: null, sleepScreen: false, page: null,
   toast: null, confirm: null, libraryFilter: 'all', search: '',
-  soundsView: 'library', story: null, viewStoryId: null, storyFilter: 'all', storySearch: '', narrationAvailable: null,
+  soundsView: 'library', story: null, viewStoryId: null, storyFilter: 'all', storySearch: '', storyAudience: 'adult', narrationAvailable: null,
 };
 
 // ---------- persistence ----------

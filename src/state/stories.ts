@@ -132,12 +132,14 @@ export async function initStories() {
 export function openStory(id: string) {
   const story = getStory(id);
   if (!story) { toast('That story could not be found.', 'error'); return; }
+  if (s().kidsMode && story.audience !== 'kids') { toast('Kids Mode is on. Only children’s stories can be opened.'); return; }
   store.set({ page: 'storyPlayer', viewStoryId: id });
 }
 
 export async function playStory(id: string, fromIndex?: number) {
   const story = getStory(id);
   if (!story) { toast('That story could not be found.', 'error'); return; }
+  if (s().kidsMode && story.audience !== 'kids') { toast('Kids Mode is on. Only children’s stories can be played.'); return; }
   store.set({ page: 'storyPlayer', viewStoryId: id });
   if (isStoryLocked(story)) { store.set({ sheet: 'premium', premiumFocus: id }); return; }
   await engine.unlock(); // must happen inside the tap

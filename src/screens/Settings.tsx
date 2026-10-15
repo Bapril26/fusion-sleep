@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { store, useStore, confirmAction, clearPersisted, toast, type Settings as S, type Page } from '../state/store';
 import { clearRecent, stopEverything, setMasterVolume, setProTest } from '../state/player';
 import { clearStoryHistory, setNarratorPrefs } from '../state/stories';
+import { enableKidsMode } from '../state/kids';
 import { storyServerConfigured } from '../config/storyServer';
 import { TEST_BUILD, PLAN_NAME } from '../billing/plans';
 import { soundById } from '../data/sounds';
@@ -35,14 +36,45 @@ export function Settings() {
   const narratorPrefs = useStore((s) => s.narrator);
   const bg = useStore((s) => s.storyBackground);
   const narration = useStore((s) => s.narrationAvailable);
+  const kidsMode = useStore((s) => s.kidsMode);
   const set = (p: Partial<S>) => store.set({ settings: { ...settings, ...p } });
   const open = (page: Page) => store.set({ page });
+
+  if (kidsMode) {
+    return (
+      <div className="screen">
+        <div className="pad">
+          <div className="eyebrow">Settings</div>
+          <h1 className="title" style={{ marginTop: 4 }}>Kids Mode is on</h1>
+          <p className="muted small" style={{ marginTop: 6 }}>Only children's stories and sleep sounds are available. Settings are locked so little hands can't change them.</p>
+        </div>
+        <div className="mix-card" style={{ marginTop: 20, textAlign: 'center', padding: '26px 20px' }}>
+          <div style={{ width: 64, height: 64, borderRadius: 20, margin: '0 auto 14px', display: 'grid', placeItems: 'center', background: 'rgba(22,119,255,.15)', color: 'var(--blue-2)' }}><Icon name="shield" size={30} /></div>
+          <b style={{ fontSize: 17 }}>For grown-ups</b>
+          <p className="muted small" style={{ margin: '6px 0 16px' }}>Answer a quick question to turn Kids Mode off and open all settings.</p>
+          <button className="btn" onClick={() => store.set({ sheet: 'parentGate' })}><Icon name="lock" size={18} />Turn off Kids Mode</button>
+        </div>
+        <BrandFooter />
+      </div>
+    );
+  }
 
   return (
     <div className="screen">
       <div className="pad">
         <div className="eyebrow">Settings</div>
         <h1 className="title" style={{ marginTop: 4 }}>Make it yours</h1>
+      </div>
+
+      <div className="group-label">Kids</div>
+      <div className="group">
+        <div className="set-row" style={{ cursor: 'default' }}>
+          <span className="ic"><Icon name="shield" size={18} /></span>
+          <span className="tx"><b>Kids Mode</b><span>Shows only children's stories and hides grown-up content. A grown-up question is needed to turn it off.</span></span>
+          <Toggle on={false} onChange={() => confirmAction({
+            title: 'Turn on Kids Mode?', message: 'Only children’s stories and sleep sounds will be shown. Grown-up stories, personalised stories and settings will be hidden until a grown-up turns Kids Mode off.', confirmLabel: 'Turn on', onConfirm: enableKidsMode,
+          })} label="Kids Mode" />
+        </div>
       </div>
 
       <div className="group-label">Playback</div>

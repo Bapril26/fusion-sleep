@@ -1,4 +1,4 @@
-import { STORIES } from '../data/stories';
+import { STORIES, KIDS_STORIES } from '../data/stories';
 import { soundById } from '../data/sounds';
 import { store, useStore } from '../state/store';
 import { playMix } from '../state/player';
@@ -14,8 +14,11 @@ export function Favourites() {
   const mixes = useStore((s) => s.mixes);
   const recentStories = useStore((s) => s.recentStories);
   const recentSounds = useStore((s) => s.recent);
-  const stories = favStories.map((id) => mine.find((x) => x.id === id) ?? STORIES.find((x) => x.id === id)).filter(Boolean);
-  const recent = recentStories.map((id) => mine.find((x) => x.id === id) ?? STORIES.find((x) => x.id === id)).filter(Boolean).slice(0, 4);
+  const kidsMode = useStore((s) => s.kidsMode);
+  const find = (id: string) => mine.find((x) => x.id === id) ?? STORIES.find((x) => x.id === id) ?? KIDS_STORIES.find((x) => x.id === id);
+  const ok = (st: ReturnType<typeof find>) => !!st && (!kidsMode || st.audience === 'kids');
+  const stories = favStories.map(find).filter(ok);
+  const recent = recentStories.map(find).filter(ok).slice(0, 4);
   const nothing = !favSounds.length && !stories.length && !mixes.length;
 
   return (

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { soundById, SOUNDS } from '../data/sounds';
-import { STORIES } from '../data/stories';
+import { STORIES, KIDS_STORIES } from '../data/stories';
 import { getStory } from '../state/stories';
 import { BrandFooter } from '../components/BrandFooter';
 import { store, useStore } from '../state/store';
@@ -50,7 +50,7 @@ export function SleepScreen() {
 
 const STEPS = [
   { icon: 'rain', eyebrow: 'Welcome', title: 'Drift off to rain, waves and nature', body: `${SOUNDS.length} calming sounds — rainfall, thunderstorms, ocean waves, forests, crickets, soft music and white noise. Every sound loops seamlessly.` },
-  { icon: 'book', eyebrow: 'Bedtime stories', title: 'Gentle stories, read to you', body: `${STORIES.length} original stories for grown-ups (romantic, peaceful, dreamy and gently mysterious), read aloud with rain or waves in the background. You can even have a new story written just for you.` },
+  { icon: 'book', eyebrow: 'Bedtime stories', title: 'Gentle stories, read to you', body: `${STORIES.length} original stories for grown-ups and ${KIDS_STORIES.length} for little ones, read aloud with rain or waves in the background. Kids Mode keeps children to their own stories.` },
   { icon: 'mixer', eyebrow: 'Sound mixer', title: 'Blend sounds into your own mix', body: 'Layer rain with distant thunder, wind or birds. Set each volume, then save your favourite combinations.' },
   { icon: 'timer', eyebrow: 'Sleep timer', title: 'Fall asleep, we’ll handle the rest', body: 'Choose 15 minutes to 2 hours. The sound fades out gently and stops on its own — even with the screen off.' },
   { icon: 'heart', eyebrow: 'Favourites', title: 'Your sounds, one tap away', body: 'Heart the sounds you love. Recently played and favourites are saved on your phone — no account needed.' },
@@ -112,6 +112,8 @@ export function InfoPage() {
       <p>Fusion Sleep does not collect, sell or share your personal information. There is no account, no sign-in and no advertising tracking.</p>
       <h2>What is stored</h2>
       <p>Your favourites, saved mixes, recently played sounds and settings are stored only on your device so the app can remember them. They never leave your phone. You can delete them at any time in Settings → Reset all preferences, or by uninstalling the app.</p>
+      <h2>Children</h2>
+      <p>Fusion Sleep is designed for adults. The Kids section is for parents and carers to play stories to their children. The app does not knowingly collect any information from children, and “Create my own story” is not available in Kids Mode.</p>
       <h2>Personalised stories</h2>
       <p>If you use “Create my own story”, your story choices and the idea you type are sent over an encrypted connection to the Fusion Sleep story server and its AI provider (Anthropic) only to write your story. A random app ID (not linked to your name) is used to apply the daily limit. Finished stories are saved on your phone.</p>
       <h2>Narration</h2>
@@ -137,6 +139,8 @@ export function InfoPage() {
       <p>Keep the volume at a comfortable, low level, especially with headphones and when listening for long periods.</p>
       <h2>Sounds and stories</h2>
       <p>The sounds and the library stories in Fusion Sleep are original works © Fusion Labs. You may use them for personal listening within the app.</p>
+      <h2>Kids stories and Kids Mode</h2>
+      <p>Fusion Sleep is intended for adults. The Kids section contains gentle stories for parents and carers to play to children. Kids Mode hides grown-up content; a grown-up should supervise children's use of the phone.</p>
       <h2>Personalised stories</h2>
       <p>Personalised stories are written by an AI service from the choices you make. They are intended for adults, are kept gentle and non-explicit, and may occasionally contain mistakes. Do not enter personal or sensitive information in your story idea.</p>
       <h2>Fusion Sleep Pro</h2>

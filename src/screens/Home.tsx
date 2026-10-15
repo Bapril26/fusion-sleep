@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { CATEGORIES, SOUNDS, POPULAR_TONIGHT, soundById } from '../data/sounds';
-import { STORIES, FEATURED_STORIES, storyById, estimateMinutes } from '../data/stories';
+import { STORIES, FEATURED_STORIES, KIDS_STORIES, storyById, estimateMinutes, type Story } from '../data/stories';
 import { store, useStore } from '../state/store';
 import { togglePlay, recommendations, playMix, isLocked } from '../state/player';
 import { playStory, toggleStory, getStory } from '../state/stories';
@@ -40,10 +40,14 @@ export function Home() {
   const session = useStore((s) => s.story);
   const animations = useStore((s) => s.settings.animations);
   const premium = useStore((s) => s.premium);
+  const kidsMode = useStore((s) => s.kidsMode);
   const recs = useMemo(() => recommendations(8), [recent, favourites, premium]);
+  const allowed = (st: Story | undefined) => !!st && (!kidsMode || st.audience === 'kids');
 
-  const tonight = storyOfTheNight();
-  const continueStory = recentStories.map((id) => getStory(id)).find((st) => st && progress[st.id] && !progress[st.id].finished && progress[st.id].index > 0);
+  const day = Math.floor(Date.now() / 86400000);
+  const tonight = kidsMode ? KIDS_STORIES[day % KIDS_STORIES.length] : storyOfTheNight();
+  const kidsTonight = KIDS_STORIES[day % KIDS_STORIES.length];
+  const continueStory = recentStories.map((id) => getStory(id)).find((st) => allowed(st) && progress[st!.id] && !progress[st!.id].finished && progress[st!.id].index > 0);
   const storyLive = session && session.status !== 'reading' ? getStory(session.id) : null;
 
   const resumeId = recent.find((id) => { const so = soundById(id); return so && !isLocked(so); }) ?? 'rain-gentle';
@@ -57,7 +61,7 @@ export function Home() {
       ? { label: status === 'paused' ? 'Paused' : 'Now playing', meta: `${soundName} · open player`, icon: status === 'playing' ? 'pause' : 'play', act: () => store.set({ sheet: 'player' }) }
       : { label: recent.length ? 'Continue listening' : 'Play a sleep sound', meta: `${resume.name} · tap to play`, icon: 'play', act: () => togglePlay() };
 
-  const favStoryList = favStories.map((id) => getStory(id)).filter(Boolean);
+  const favStoryList = favStories.map((id) => getStory(id)).filter(allowed);
 
   return (
     <div className="screen" style={{ paddingTop: 0 }}>
@@ -66,9 +70,11 @@ export function Home() {
         <div className="moon" aria-hidden="true" style={{ top: 'calc(var(--safe-t) + 70px)' }} />
         <div className="topbar">
           <div className="brand"><Logo size={38} /><div className="brand-name">Fusion <span>Sleep</span></div></div>
-          <button className="icon-btn" onClick={() => store.set({ sheet: 'premium', premiumFocus: null })} aria-label="Premium">
-            <Icon name="crown" size={20} />
-          </button>
+          {kidsMode ? <span className="tag"><Icon name="shield" size={11} stroke={2.2} /> Kids Mode</span> : (
+            <button className="icon-btn" onClick={() => store.set({ sheet: 'premium', premiumFocus: null })} aria-label="Pro">
+              <Icon name="crown" size={20} />
+            </button>
+          )}
         </div>
 
         <div className="eyebrow" style={{ marginTop: 30 }}>{greeting()}</div>
@@ -88,13 +94,15 @@ export function Home() {
         <div className="quick-row">
           <button className="quick" onClick={() => store.set({ sheet: 'timer' })}><Icon name="timer" size={18} />Sleep timer</button>
           <button className="quick" onClick={() => store.set({ tab: 'sounds', soundsView: 'mixer' })}><Icon name="mixer" size={18} />Mix sounds</button>
-          <button className="quick" onClick={() => store.set({ page: 'createStory' })}><Icon name="pen" size={18} />New story</button>
+          {kidsMode
+            ? <button className="quick" onClick={() => store.set({ tab: 'stories' })}><Icon name="star" size={18} />Kids stories</button>
+            : <button className="quick" onClick={() => store.set({ page: 'createStory' })}><Icon name="pen" size={18} />New story</button>}
         </div>
       </div>
 
       {/* Bedtime stories — the prominent feature */}
       <section className="section" style={{ marginTop: 8 }}>
-        <SectionHead title="Bedtime Stories" action="All stories" onAction={() => store.set({ tab: 'stories' })} />
+        <SectionHead title={kidsMode ? 'Bedtime Stories for Kids' : 'Bedtime Stories'} action="All stories" onAction={() => store.set({ tab: 'stories' })} />
         <div className="story-band">
           <div className="txt">
             <span className="tag" style={{ alignSelf: 'flex-start' }}><Icon name="moon" size={11} stroke={2.2} /> {continueStory ? 'Continue your story' : "Tonight's story"}</span>
@@ -111,11 +119,19 @@ export function Home() {
           <div className="art-side"><StoryCover motif={(continueStory ?? tonight).motif} seed={(continueStory ?? tonight).id} /></div>
         </div>
         <div className="rail" style={{ marginTop: 14 }}>
-          {[...mine.slice(0, 2), ...FEATURED_STORIES.map((id) => storyById(id)!), ...STORIES.filter((x) => !FEATURED_STORIES.includes(x.id))]
+          {(kidsMode ? KIDS_STORIES : [...mine.slice(0, 2), ...FEATURED_STORIES.map((id) => storyById(id)!), ...STORIES.filter((x) => !FEATURED_STORIES.includes(x.id))])
             .filter((x) => x.id !== (continueStory ?? tonight).id).slice(0, 8)
             .map((st) => <StoryCard key={st.id} story={st} />)}
         </div>
       </section>
+
+      {!kidsMode && (
+        <section className="section">
+          <SectionHead title="For little ones" action="Kids stories" onAction={() => store.set({ tab: 'stories', storyAudience: 'kids', storyFilter: 'all', storySearch: '' })} />
+          <p className="dim tiny" style={{ padding: '0 20px 10px', marginTop: -6 }}>Short, gentle bedtime stories for children, about 2 to 4 minutes each. Turn on Kids Mode in Settings before handing over the phone.</p>
+          <div className="rail">{[kidsTonight, ...KIDS_STORIES.filter((x) => x.id !== kidsTonight.id)].map((st) => <StoryCard key={st.id} story={st} />)}</div>
+        </section>
+      )}
 
       <section className="section">
         <SectionHead title="Recommended Sleep Sounds" action="All sounds" onAction={() => store.set({ tab: 'sounds', soundsView: 'library', libraryFilter: 'all', search: '' })} />
@@ -142,7 +158,7 @@ export function Home() {
         <SectionHead title="Recently Played" action={recent.length || recentStories.length ? 'Favourites' : undefined} onAction={() => store.set({ tab: 'favourites' })} />
         {recent.length || recentStories.length ? (
           <div className="rail">
-            {recentStories.slice(0, 4).map((id) => { const st = getStory(id); return st ? <StoryCard key={id} story={st} /> : null; })}
+            {recentStories.slice(0, 4).map((id) => { const st = getStory(id); return allowed(st) ? <StoryCard key={id} story={st!} /> : null; })}
             {recent.slice(0, 8).map((id) => <SoundCard key={id} id={id} queue={recent} />)}
           </div>
         ) : (

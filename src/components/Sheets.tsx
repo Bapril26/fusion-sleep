@@ -8,6 +8,7 @@ import {
 import { FREE_LIMITS, PREMIUM_LIMITS, BILLING_CONFIGURED, PLAN_NAME, PRO_PRICES } from '../billing/plans';
 import { STORIES } from '../data/stories';
 import { getStory, setNarratorPrefs } from '../state/stories';
+import { newGateQuestion, disableKidsMode } from '../state/kids';
 import { narrator, type NarratorVoice } from '../audio/narrator';
 import { StoryCover } from './StoryCover';
 import { engine } from '../audio/engine';
@@ -29,12 +30,14 @@ function Sheet({ children, label }: { children: ReactNode; label: string }) {
 
 export function Sheets() {
   const sheet = useStore((s) => s.sheet);
+  const kidsMode = useStore((s) => s.kidsMode);
   if (sheet === 'player') return <PlayerSheet />;
   if (sheet === 'timer') return <TimerSheet />;
-  if (sheet === 'premium') return <PremiumSheet />;
+  if (sheet === 'premium') return kidsMode ? <AskGrownUpSheet /> : <PremiumSheet />;
   if (sheet === 'saveMix') return <SaveMixSheet />;
   if (sheet === 'addLayer') return <AddLayerSheet />;
   if (sheet === 'voice') return <VoiceSheet />;
+  if (sheet === 'parentGate') return <ParentGateSheet />;
   return null;
 }
 
@@ -288,6 +291,45 @@ function PremiumSheet() {
         </>
       )}
       <button className="btn ghost block" style={{ marginTop: 12 }} onClick={() => store.set({ sheet: null })}>{premium ? 'Close' : 'Continue with free version'}</button>
+    </Sheet>
+  );
+}
+
+// ---------- kids ----------
+
+function AskGrownUpSheet() {
+  return (
+    <Sheet label="Ask a grown-up">
+      <div style={{ textAlign: 'center', padding: '10px 0 6px' }}>
+        <div style={{ width: 64, height: 64, borderRadius: 20, margin: '0 auto 14px', display: 'grid', placeItems: 'center', background: 'rgba(22,119,255,.15)', color: 'var(--blue-2)' }}><Icon name="lock" size={28} /></div>
+        <h3 style={{ fontSize: 20, fontWeight: 600 }}>Ask a grown-up</h3>
+        <p className="muted" style={{ margin: '8px 0 18px' }}>This one isn't available in Kids Mode. Try another story or sound!</p>
+        <button className="btn block" onClick={() => store.set({ sheet: null })}>OK</button>
+      </div>
+    </Sheet>
+  );
+}
+
+function ParentGateSheet() {
+  const [q] = useState(newGateQuestion);
+  const [value, setValue] = useState('');
+  const [wrong, setWrong] = useState(false);
+  const submit = () => {
+    if (Number(value.trim()) === q.answer) disableKidsMode();
+    else { setWrong(true); setValue(''); }
+  };
+  return (
+    <Sheet label="Grown-up check">
+      <div className="sheet-head">
+        <h3>Grown-ups only</h3>
+        <button className="icon-btn" onClick={() => store.set({ sheet: null })} aria-label="Close"><Icon name="x" /></button>
+      </div>
+      <p className="muted">To turn off Kids Mode, please answer:</p>
+      <div style={{ fontSize: 34, fontWeight: 600, textAlign: 'center', margin: '18px 0' }}>What is {q.text}?</div>
+      <input id="gate-answer" className="text-input" inputMode="numeric" pattern="[0-9]*" autoComplete="off" value={value} placeholder="Type the answer"
+        onChange={(e) => { setValue(e.target.value.replace(/\D/g, '')); setWrong(false); }} onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} aria-label="Answer" />
+      {wrong && <p role="alert" style={{ color: 'var(--danger)', marginTop: 8, fontSize: 14 }}>That's not right. Please ask a grown-up.</p>}
+      <button className="btn block" style={{ marginTop: 14 }} onClick={submit} disabled={!value}>Turn off Kids Mode</button>
     </Sheet>
   );
 }

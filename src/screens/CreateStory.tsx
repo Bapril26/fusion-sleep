@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { STORY_CATEGORIES, type StoryCategoryId } from '../data/stories';
+import { STORY_CATEGORIES } from '../data/stories';
 import { store, useStore, toast } from '../state/store';
 import { generateStory, cancelGeneration, findExisting, generationsLeft, dailyStoryLimit, allowedMinutes, GenerationError, type StoryRequest } from '../state/generate';
 import { openStory, playStory } from '../state/stories';
@@ -8,7 +8,8 @@ import { storyServerConfigured } from '../config/storyServer';
 import { Icon } from '../components/Icon';
 import { BrandFooter } from '../components/BrandFooter';
 
-const SETTINGS: Record<StoryCategoryId, string[]> = {
+type AdultCategory = 'romantic' | 'peaceful' | 'dream' | 'mystery';
+const SETTINGS: Record<AdultCategory, string[]> = {
   romantic: ['A seaside town', 'A vineyard at harvest', 'A rainy city café', 'A mountain lodge', 'A night train'],
   peaceful: ['A cosy cabin in the rain', 'A luxury sleeper train', 'A quiet beach at dusk', 'A forest village', 'A lake at night'],
   dream: ['A floating island', 'A garden of glass flowers', 'A sky full of lanterns', 'A library under the sea', 'A desert of soft stars'],
@@ -20,8 +21,9 @@ const LENGTHS: StoryRequest['minutes'][] = [5, 10, 20, 30];
 export function CreateStory() {
   const page = useStore((s) => s.page);
   const prefVoice = useStore((s) => s.narrator.voiceId);
+  const kidsMode = useStore((s) => s.kidsMode);
   const online = useOnline();
-  const [category, setCategory] = useState<StoryCategoryId>('peaceful');
+  const [category, setCategory] = useState<AdultCategory>('peaceful');
   const [setting, setSetting] = useState(SETTINGS.peaceful[0]);
   const [customSetting, setCustomSetting] = useState('');
   const [mood, setMood] = useState('Calm');
@@ -34,7 +36,7 @@ export function CreateStory() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { if (page === 'createStory') narrator.voices().then((r) => setVoices(r.voices)).catch(() => setVoices([])); }, [page]);
-  if (page !== 'createStory') return null;
+  if (page !== 'createStory' || kidsMode) return null;
 
   const configured = storyServerConfigured();
   const left = generationsLeft();
@@ -87,7 +89,7 @@ export function CreateStory() {
         <div className="cat-pick" role="radiogroup" aria-label="Type of story">
           {STORY_CATEGORIES.map((c) => (
             <button key={c.id} role="radio" aria-checked={category === c.id} className={category === c.id ? 'on' : ''}
-              onClick={() => { setCategory(c.id); setSetting(SETTINGS[c.id][0]); }} disabled={busy}>
+              onClick={() => { setCategory(c.id as AdultCategory); setSetting(SETTINGS[c.id as AdultCategory][0]); }} disabled={busy}>
               <Icon name={c.icon} size={20} /><b>{c.short}</b><span>{c.blurb}</span>
             </button>
           ))}
